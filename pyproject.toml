@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "padapto"
+version = "0.0.0"
+authors = [
+    { name="Mattéo Delabre", email="git.matteo@delab.re" },
+]
+description = "TODO"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "immutables"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/matteodelabre/padapto"
+"Bug Tracker" = "https://github.com/matteodelabre/padapto/issues"
+
+[tool.hatch.build]
+sources = ["src"]
+only-include = ["src"]
+
+[tool.hatch.envs.dev]
+dependencies = [
+    "pytest",
+    "black",
+    "ruff",
+    "mypy",
+]
+
+[tool.hatch.envs.dev.scripts]
+test = "pytest --exitfirst"
+test-verbose = "pytest --exitfirst -vv"
+format = "black --diff --check --color ."
+format-fix = "black ."
+lint = "ruff check ."
+lint-fix = "ruff check --fix ."
+typecheck = "mypy ."
+
+[tool.ruff.lint]
+select = [
+    # pydocstyle
+    "D",
+    # pycodestyle
+    "E",
+    # eradicate
+    "ERA",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]
+ignore = ["D100", "D105", "D203", "D212"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["D104"]
+"tests/*" = ["D"]
