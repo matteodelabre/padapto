@@ -38,12 +38,16 @@ dependencies = [
 
 [tool.hatch.envs.dev.scripts]
 test = "pytest --exitfirst"
-test-verbose = "pytest --exitfirst -vv"
 format = "black --diff --check --color ."
 format-fix = "black ."
 lint = "ruff check ."
 lint-fix = "ruff check --fix ."
 typecheck = "mypy ."
+check-all = """
+hatch run dev:lint \
+&& hatch run dev:typecheck \
+&& hatch run dev:format \
+&& hatch run dev:test"""
 
 [tool.ruff.lint]
 select = [
