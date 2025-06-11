@@ -35,10 +35,15 @@ class Record:
 class Multiset[T](tuple[T, ...]):
     """Immutable tuple of hashable elements with no preferred ordering."""
 
-    def __init__(self, elements: Iterable[T] = ()) -> None:
+    _counter: Counter[T]
+    _hash: int
+
+    def __new__(cls, elements: Iterable[T] = ()) -> Self:
         """Create a multiset containing the given elements."""
+        self = super().__new__(cls, elements)
         self._counter = Counter(self)
         self._hash = hash(Map(self._counter))
+        return self
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, type(self)) and self._counter == other._counter

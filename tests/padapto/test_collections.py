@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from padapto.collections import Multiset, Record
@@ -34,6 +36,14 @@ def test_record_repr():
 def test_candidates_init():
     assert Multiset(()) == Multiset()
     assert Multiset(range(10)) == Multiset((0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Multiset.__new__() takes from 1 to 2 positional arguments but 3 were given"
+        ),
+    ):
+        Multiset(1, 2)  # noqa: B018
 
 
 def test_candidates_eq_ne():
