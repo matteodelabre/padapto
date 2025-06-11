@@ -18,7 +18,7 @@ from .signature import (
 
 def _make_pareto_wrapper[T](
     comparators: Mapping[str, Comparator[Any]],
-    choose,
+    choose: Callable[[T, T], T],
 ) -> Callable[[Operator[Multiset[T]]], Operator[Multiset[T]]]:
     def value_le(value1: T, value2: T) -> bool:
         return all(
