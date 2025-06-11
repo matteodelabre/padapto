@@ -59,6 +59,10 @@ select = [
     "UP",
     # flake8-bugbear
     "B",
+    # flake8-fixme
+    "FIX",
+    # flake8-debugger
+    "T10",
     # flake8-simplify
     "SIM",
     # isort
