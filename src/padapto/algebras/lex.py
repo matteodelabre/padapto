@@ -68,11 +68,10 @@ def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]
         of that subalgebra is conservative)
     :returns: new transformed algebra
     """
-    choose = algebra.choose
-    subalgebras = get_algebra_metadata(algebra, join)
-
-    if subalgebras is None:
+    if (subalgebras := get_algebra_metadata(algebra, join)) is None:
         raise TypeError("lex: provided algebra is not a joined algebra")
+
+    choose = algebra.choose
 
     for field in reversed(fields):
         compare = None

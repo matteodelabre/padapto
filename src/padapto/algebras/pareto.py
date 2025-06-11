@@ -3,6 +3,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from ..collections import Multiset
+from .group import group
 from .join import join
 from .power import power
 from .signature import (
@@ -18,7 +19,6 @@ from .signature import (
 
 def _make_pareto_wrapper[T](
     comparators: Mapping[str, Comparator[Any]],
-    choose: Callable[[T, T], T],
 ) -> Callable[[Operator[Multiset[T]]], Operator[Multiset[T]]]:
     def value_le(value1: T, value2: T) -> bool:
         return all(
@@ -32,26 +32,14 @@ def _make_pareto_wrapper[T](
         )
 
     def pareto_filter(values: Iterable[T]) -> Multiset[T]:
-        values = list(values)
-        results = []
-        keep = [True] * len(values)
-
-        for i, value1 in enumerate(values):
-            if not keep[i]:
-                continue
-
-            for j, value2 in enumerate(values):
-                if i == j:
-                    continue
-                elif value_eq(value2, value1):
-                    value1 = choose(value1, value2)
-                    keep[j] = False
-                elif value_le(value2, value1):
-                    break
-            else:
-                results.append(value1)
-
-        return Multiset(results)
+        return Multiset(
+            value
+            for value in values
+            if not any(
+                value_le(other, value) and not value_eq(other, value)
+                for other in values
+            )
+        )
 
     def pareto_wrapper(operator: Operator[Multiset[T]]) -> Operator[Multiset[T]]:
         def wrapped_operator(*args: Any) -> Multiset[T]:
@@ -75,19 +63,24 @@ def pareto[S: Signature[Multiset[Any]]](
     two values are equal on all fields, they get combined using the original choice
     function of the other subalgebras.
 
-    The resulting algebra is valid if all the given comparator functions are total and
-    monotonous orders.
+    The resulting algebra is valid if the given algebra is valid and all the given
+    comparator functions are total and monotonous orders.
 
     Note: Corresponds to the "Pareto product operator" as defined in "Pareto
     optimization in algebraic dynamic programming" by Saule and Giegerich (2015).
-    """
-    joined_algebra = get_algebra_metadata(algebra, power)
-    subalgebras = get_algebra_metadata(algebra, join)
 
-    if joined_algebra is None:
+    :param algebra: power-joined algebra to transform
+    :param fields: fields with respect to which to order - each argument is either a
+        tuple containing a field name and a comparator giving the total order to use for
+        that field, or simply a plain field name (in which case the natural order of the
+        subalgebra is used, which is always total and monotonous if the choice function
+        of that subalgebra is conservative)
+    :returns: new transformed algebra
+    """
+    if get_algebra_metadata(algebra, power) is None:
         raise TypeError("pareto: provided algebra is not a power algebra")
 
-    if subalgebras is None:
+    if (subalgebras := get_algebra_metadata(algebra, join)) is None:
         raise TypeError("pareto: provided algebra is not a joined algebra")
 
     comparators: dict[str, Comparator[Any]] = {}
@@ -107,13 +100,14 @@ def pareto[S: Signature[Multiset[Any]]](
             comparators[field] = compare
 
     signature = type(algebra)
-    pareto_wrapper = _make_pareto_wrapper(comparators, joined_algebra.choose)
+    pareto_wrapper = _make_pareto_wrapper(comparators)
+    grouped = group(algebra, *comparators.keys())
     result = signature(
         **{
-            field.name: pareto_wrapper(getattr(algebra, field.name))
+            field.name: pareto_wrapper(getattr(grouped, field.name))
             for field in dataclasses.fields(signature)
         }
     )
-    copy_algebra_metadata(algebra, result)
+    copy_algebra_metadata(grouped, result)
     set_algebra_metadata(result, pareto, (algebra, fields))
     return result
