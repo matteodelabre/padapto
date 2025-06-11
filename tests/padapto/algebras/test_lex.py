@@ -39,15 +39,6 @@ def test_lex_single():
 
     select = lex(joined, "cost")
 
-    check_semiring(
-        select,
-        (
-            CostCount(cost=2, count=10),
-            CostCount(cost=3, count=7),
-        ),
-        conservative=False,
-    )
-
     assert select.choose(
         CostCount(cost=2, count=10),
         CostCount(cost=3, count=7),
@@ -67,6 +58,15 @@ def test_lex_single():
         CostCount(cost=2, count=10),
         CostCount(cost=3, count=7),
     ) == CostCount(cost=2 + 3, count=7 * 10)
+
+    check_semiring(
+        select,
+        (
+            CostCount(cost=2, count=10),
+            CostCount(cost=3, count=7),
+        ),
+        conservative=False,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,17 +98,6 @@ def test_lex_multiple():
     sel_cost_distance = lex(joined, "cost", "distance")
     sel_distance_cost = lex(joined, "distance", "cost")
 
-    check_semiring(
-        sel_cost_distance,
-        (
-            CostDistanceCount(cost=2, distance=7, count=10),
-            CostDistanceCount(cost=3, distance=5, count=7),
-            CostDistanceCount(cost=4, distance=4, count=3),
-            CostDistanceCount(cost=1, distance=2, count=5),
-        ),
-        conservative=False,
-    )
-
     assert sel_cost_distance.choose(
         CostDistanceCount(cost=2, distance=7, count=10),
         CostDistanceCount(cost=3, distance=5, count=7),
@@ -134,6 +123,17 @@ def test_lex_multiple():
         CostDistanceCount(cost=2, distance=5, count=7),
     ) == CostDistanceCount(cost=2, distance=5, count=7 + 10)
 
+    check_semiring(
+        sel_cost_distance,
+        (
+            CostDistanceCount(cost=2, distance=7, count=10),
+            CostDistanceCount(cost=3, distance=5, count=7),
+            CostDistanceCount(cost=4, distance=4, count=3),
+            CostDistanceCount(cost=1, distance=2, count=5),
+        ),
+        conservative=False,
+    )
+
 
 def test_lex_none():
     tropical = SemiRing[int | float](
@@ -156,6 +156,11 @@ def test_lex_none():
 
     lexed_none = lex(joined)
 
+    assert lexed_none.choose(
+        CostDistanceCount(cost=2, distance=7, count=10),
+        CostDistanceCount(cost=3, distance=5, count=7),
+    ) == CostDistanceCount(cost=2, distance=5, count=17)
+
     check_semiring(
         lexed_none,
         (
@@ -166,11 +171,6 @@ def test_lex_none():
         ),
         conservative=False,
     )
-
-    assert lexed_none.choose(
-        CostDistanceCount(cost=2, distance=7, count=10),
-        CostDistanceCount(cost=3, distance=5, count=7),
-    ) == CostDistanceCount(cost=2, distance=5, count=17)
 
 
 def test_lex_invalid():

@@ -29,17 +29,6 @@ def test_pareto_two():
         power(join(TwoFields, first=tropical, second=tropical)), "first", "second"
     )
 
-    check_semiring(
-        algebra,
-        (
-            Multiset((TwoFields(first=2, second=3),)),
-            Multiset((TwoFields(first=1, second=2),)),
-            Multiset((TwoFields(first=3, second=2),)),
-            Multiset((TwoFields(first=3, second=2), TwoFields(first=1, second=5))),
-        ),
-        conservative=False,
-    )
-
     assert algebra.choose(
         Multiset((TwoFields(first=1, second=2),)),
         Multiset((TwoFields(first=2, second=1),)),
@@ -84,6 +73,17 @@ def test_pareto_two():
             TwoFields(first=6, second=9),
             TwoFields(first=9, second=6),
         )
+    )
+
+    check_semiring(
+        algebra,
+        (
+            Multiset((TwoFields(first=2, second=3),)),
+            Multiset((TwoFields(first=1, second=2),)),
+            Multiset((TwoFields(first=3, second=2),)),
+            Multiset((TwoFields(first=3, second=2), TwoFields(first=1, second=5))),
+        ),
+        conservative=False,
     )
 
 
@@ -219,6 +219,11 @@ def test_pareto_none():
         power(join(TwoFieldsData, first=tropical, second=tropical, data=integers)),
     )
 
+    assert algebra.choose(
+        Multiset((TwoFieldsData(first=1, second=2, data=2),)),
+        Multiset((TwoFieldsData(first=2, second=1, data=3),)),
+    ) == Multiset((TwoFieldsData(first=1, second=1, data=2 + 3),))
+
     check_semiring(
         algebra,
         (
@@ -228,11 +233,6 @@ def test_pareto_none():
         ),
         conservative=False,
     )
-
-    assert algebra.choose(
-        Multiset((TwoFieldsData(first=1, second=2, data=2),)),
-        Multiset((TwoFieldsData(first=2, second=1, data=3),)),
-    ) == Multiset((TwoFieldsData(first=1, second=1, data=2 + 3),))
 
 
 def test_pareto_metadata():
