@@ -42,12 +42,14 @@ format = "black --diff --check --color ."
 format-fix = "black ."
 lint = "ruff check ."
 lint-fix = "ruff check --fix ."
-typecheck = "mypy ."
+typecheck = "mypy --exclude examples ."
+examples = "for file in examples/*; do echo 'Running' $file; python $file; done"
 check-all = """
 hatch run dev:lint \
 && hatch run dev:typecheck \
 && hatch run dev:format \
-&& hatch run dev:test"""
+&& hatch run dev:test \
+&& hatch run dev:examples"""
 
 [tool.ruff.lint]
 select = [
@@ -77,3 +79,4 @@ ignore = ["D100", "D105", "D203", "D212"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["D104"]
 "tests/*" = ["D"]
+"examples/*" = ["D"]
