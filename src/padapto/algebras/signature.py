@@ -20,6 +20,9 @@ class Signature[T]:
     - the choice function is commutative
       (i.e., choose(x, y) = choose(y, x) for all values x and y),
 
+    - the choice function is associative
+      (i.e., choose(x, choose(y, z)) = choose(choose(x, y), z) for all values x, y, z),
+
     - the choice function distributes over all algebra functions
       (i.e., choose(f(x, y), f(x, z)) = f(x, choose(y, z)) for any x, y and z, for any
       function f of the algebra, and for any argument of f).
@@ -40,6 +43,10 @@ class Signature[T]:
 
     # Function to choose between two solutions
     choose: Callable[[T, T], T]
+
+    def multichoose(self, *args: T) -> T:
+        """Choose between any number of solutions."""
+        return reduce(self.choose, args, self.null())
 
     def __or__[R](self, fun: Callable[[Self], R]) -> R:
         """Use this algebra as the first argument of a pipable function."""

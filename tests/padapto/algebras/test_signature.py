@@ -32,7 +32,13 @@ def check_semiring[T](
         if conservative:
             assert algebra.choose(value, value) == value
 
+    # Check nullary multichoose
+    assert algebra.multichoose() == algebra.null()
+
     for value1, value2 in itertools.combinations(values, r=2):
+        # Check binary multichoose
+        assert algebra.multichoose(value1, value2) == algebra.choose(value1, value2)
+
         # Check commutativity
         assert algebra.choose(value1, value2) == algebra.choose(value2, value1)
 
@@ -40,8 +46,17 @@ def check_semiring[T](
         if conservative:
             assert algebra.choose(value1, value2) in (value1, value2)
 
-    # Check distributivity
     for value1, value2, value3 in itertools.product(values, repeat=3):
+        # Check associativity and ternary multichoose
+        assert algebra.multichoose(value1, value2, value3) == algebra.choose(
+            algebra.choose(value1, value2), value3
+        )
+
+        assert algebra.multichoose(value1, value2, value3) == algebra.choose(
+            value1, algebra.choose(value2, value3)
+        )
+
+        # Check distributivity
         assert algebra.choose(
             algebra.combine(value1, value2),
             algebra.combine(value1, value3),
