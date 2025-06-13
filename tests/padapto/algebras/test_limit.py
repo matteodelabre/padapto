@@ -25,16 +25,16 @@ def test_limit() -> None:
             ),
         )
 
-    gen_all = cast(SemiRing[Multiset[tuple[str, ...]]], power(free))
+    gen_all = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
     all_results = algo(gen_all)
 
     for i in range(len(all_results)):
-        gen_some = limit(gen_all, maxsize=i)
+        gen_some = gen_all | limit(maxsize=i)
         some_results = algo(gen_some)
         assert len(some_results) == i
         assert some_results <= all_results
 
-    assert all_results == algo(limit(gen_all, maxsize=len(all_results)))
+    assert all_results == algo(gen_all | limit(maxsize=len(all_results)))
 
 
 def test_limit_metadata():
@@ -45,10 +45,10 @@ def test_limit_metadata():
         combine=lambda x, y: x + y if x is not None and y is not None else None,
     )
 
-    gen_all = cast(SemiRing[Multiset[tuple[str, ...]]], power(free))
-    gen_some = limit(gen_all, maxsize=10)
-    gen_some_more = limit(gen_some, maxsize=15)
-    gen_some_less = limit(gen_some, maxsize=5)
+    gen_all = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
+    gen_some = gen_all | limit(maxsize=10)
+    gen_some_more = gen_all | limit(maxsize=10) | limit(maxsize=15)
+    gen_some_less = gen_all | limit(maxsize=10) | limit(maxsize=5)
 
     assert get_algebra_metadata(gen_some, power) == free
     assert get_algebra_metadata(gen_some_more, power) == free

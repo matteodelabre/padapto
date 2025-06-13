@@ -25,8 +25,10 @@ def test_pareto_two():
         combine=operator.add,
     )
 
-    algebra = pareto(
-        power(join(TwoFields, first=tropical, second=tropical)), "first", "second"
+    algebra = (
+        join(TwoFields, first=tropical, second=tropical)
+        | power()
+        | pareto("first", "second")
     )
 
     assert algebra.choose(
@@ -108,10 +110,10 @@ def test_pareto_partial():
         combine=operator.mul,
     )
 
-    algebra = pareto(
-        power(join(TwoFieldsData, first=tropical, second=tropical, data=integers)),
-        "first",
-        "second",
+    algebra = (
+        join(TwoFieldsData, first=tropical, second=tropical, data=integers)
+        | power()
+        | pareto("first", "second")
     )
 
     assert algebra.choose(
@@ -215,8 +217,10 @@ def test_pareto_none():
         combine=operator.mul,
     )
 
-    algebra = pareto(
-        power(join(TwoFieldsData, first=tropical, second=tropical, data=integers)),
+    algebra = (
+        join(TwoFieldsData, first=tropical, second=tropical, data=integers)
+        | power()
+        | pareto()
     )
 
     assert algebra.choose(
@@ -250,8 +254,8 @@ def test_pareto_metadata():
     )
 
     joined = join(TwoFieldsData, first=tropical, second=tropical, data=integers)
-    powerset = power(joined)
-    algebra = pareto(powerset, "first", "second")
+    powerset = joined | power()
+    algebra = powerset | pareto("first", "second")
 
     assert get_algebra_metadata(algebra, pareto) == (powerset, ("first", "second"))
     assert get_algebra_metadata(algebra, power) == joined

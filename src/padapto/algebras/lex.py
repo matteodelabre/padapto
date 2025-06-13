@@ -9,6 +9,7 @@ from .signature import (
     copy_algebra_metadata,
     get_algebra_metadata,
     make_natural_order,
+    pipable,
     set_algebra_metadata,
 )
 
@@ -39,6 +40,7 @@ def _make_lex_choice[T](
     return choose
 
 
+@pipable
 def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]]) -> S:
     """
     Select between values based on a lexicographical order in a joined algebra.

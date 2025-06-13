@@ -7,6 +7,7 @@ from .signature import (
     Signature,
     copy_algebra_metadata,
     get_algebra_metadata,
+    pipable,
     set_algebra_metadata,
 )
 
@@ -21,6 +22,7 @@ def _limit_wrap_operator[T](
     return wrapped_operator
 
 
+@pipable
 def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int) -> S:
     """
     Limit the number of entries in each value of a power algebra.

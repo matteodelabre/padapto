@@ -13,6 +13,7 @@ from .signature import (
     copy_algebra_metadata,
     get_algebra_metadata,
     make_natural_order,
+    pipable,
     set_algebra_metadata,
 )
 
@@ -50,6 +51,7 @@ def _make_pareto_wrapper[T](
     return pareto_wrapper
 
 
+@pipable
 def pareto[S: Signature[Multiset[Any]]](
     algebra: S,
     *fields: str | tuple[str, Comparator[Any]],
@@ -101,7 +103,7 @@ def pareto[S: Signature[Multiset[Any]]](
 
     signature = type(algebra)
     pareto_wrapper = _make_pareto_wrapper(comparators)
-    grouped = group(algebra, *comparators.keys())
+    grouped = algebra | group(*comparators.keys())
     result = signature(
         **{
             field.name: pareto_wrapper(getattr(grouped, field.name))

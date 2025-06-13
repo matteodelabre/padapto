@@ -11,6 +11,7 @@ from .signature import (
     Signature,
     copy_algebra_metadata,
     get_algebra_metadata,
+    pipable,
     set_algebra_metadata,
 )
 
@@ -41,6 +42,7 @@ def _group_operator[T](
     return Multiset(results)
 
 
+@pipable
 def group[S: Signature[Multiset[Any]]](
     algebra: S,
     *fields: str,

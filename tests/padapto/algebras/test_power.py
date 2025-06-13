@@ -20,7 +20,7 @@ def test_power_simple() -> None:
         combine=operator.add,
     )
 
-    all_trop = cast(SemiRing[Multiset[int | float]], power(tropical))
+    all_trop = cast(SemiRing[Multiset[int | float]], tropical | power())
 
     assert all_trop.null() == Multiset()
     assert all_trop.unit() == Multiset((0,))
@@ -51,7 +51,7 @@ def test_power_order() -> None:
         combine=operator.add,
     )
 
-    all_trop = cast(SemiRing[Multiset[int | float]], power(tropical, order=True))
+    all_trop = cast(SemiRing[Multiset[int | float]], tropical | power(order=True))
 
     assert all_trop.null() == Multiset()
     assert all_trop.unit() == Multiset((0,))
@@ -86,7 +86,7 @@ def test_power_generate() -> None:
         combine=lambda x, y: x + y if x is not None and y is not None else None,
     )
 
-    generator = cast(SemiRing[Multiset[tuple[str, ...]]], power(free))
+    generator = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
 
     assert generator.null() == Multiset()
     assert generator.unit() == Multiset(((),))
@@ -132,19 +132,14 @@ def test_power_lex():
 
     algebra = cast(
         SemiRing[Multiset[CostDistanceCount]],
-        power(
-            lex(
-                join(
-                    CostDistanceCount,
-                    cost=tropical,
-                    distance=tropical,
-                    count=integers,
-                ),
-                "cost",
-                "distance",
-            ),
-            order=True,
-        ),
+        join(
+            CostDistanceCount,
+            cost=tropical,
+            distance=tropical,
+            count=integers,
+        )
+        | lex("cost", "distance")
+        | power(order=True),
     )
 
     assert list(
@@ -198,7 +193,10 @@ def test_power_power() -> None:
         combine=operator.add,
     )
 
-    double = cast(SemiRing[Multiset[Multiset[int | float]]], power(power(tropical)))
+    double = cast(
+        SemiRing[Multiset[Multiset[int | float]]],
+        tropical | power() | power(),
+    )
 
     assert double.null() == Multiset()
     assert double.unit() == Multiset((Multiset((0,)),))
@@ -243,5 +241,5 @@ def test_power_metadata():
         combine=lambda x, y: x + y if x is not None and y is not None else None,
     )
 
-    generator = cast(SemiRing[Multiset[tuple[str, ...]]], power(free))
+    generator = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
     assert get_algebra_metadata(generator, power) == free

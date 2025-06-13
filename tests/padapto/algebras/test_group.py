@@ -35,7 +35,7 @@ def test_group_count():
 
     algebra = cast(
         SemiRing[Multiset[CostCount]],
-        group(power(join(CostCount, cost=tropical, count=integers)), "cost"),
+        join(CostCount, cost=tropical, count=integers) | power() | group("cost"),
     )
 
     assert algebra.null() == Multiset()
@@ -110,9 +110,11 @@ def test_group_twice():
 
     algebra = cast(
         SemiRing[Multiset[CostCount]],
-        group(
-            group(power(join(CostCount, cost=tropical, count=integers)), "cost"),
-            "cost",
+        (
+            join(CostCount, cost=tropical, count=integers)
+            | power()
+            | group("cost")
+            | group("cost")
         ),
     )
 
@@ -162,11 +164,15 @@ def test_group_sets():
         combine=lambda x, y: x + y if x is not None and y is not None else None,
     )
 
-    generator = cast(SemiRing[Multiset[tuple[str, ...]]], power(free))
+    generator = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
 
     algebra = cast(
         SemiRing[Multiset[CostSolutions]],
-        group(power(join(CostSolutions, cost=tropical, solutions=generator)), "cost"),
+        (
+            join(CostSolutions, cost=tropical, solutions=generator)
+            | power()
+            | group("cost")
+        ),
     )
 
     assert algebra.null() == Multiset()
@@ -242,7 +248,7 @@ def test_group_none():
 
     algebra = cast(
         SemiRing[Multiset[CostCount]],
-        group(power(join(CostCount, cost=tropical, count=integers))),
+        join(CostCount, cost=tropical, count=integers) | power() | group(),
     )
 
     assert algebra.choose(
@@ -278,17 +284,17 @@ def test_group_invalid():
         TypeError,
         match="group: provided algebra is not a power algebra",
     ):
-        group(tropical, "a", "b", "c")
+        tropical | group("a", "b", "c")
 
-    pow_tropical = power(tropical)
+    pow_tropical = tropical | power()
 
     with pytest.raises(
         TypeError,
         match="group: provided algebra is not a joined algebra",
     ):
-        group(pow_tropical, "a", "b", "c")
+        pow_tropical | group("a", "b", "c")
 
-    joined = power(join(a=tropical, b=tropical))
+    joined = join(a=tropical, b=tropical) | power()
 
     with pytest.raises(TypeError, match="group: 'c' is not a subalgebra field"):
-        group(joined, "a", "b", "c")
+        joined | group("a", "b", "c")

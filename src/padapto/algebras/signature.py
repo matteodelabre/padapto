@@ -1,7 +1,8 @@
 from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
+from functools import reduce, wraps
 from types import GenericAlias
-from typing import Any, TypeVar, get_args, get_origin
+from typing import Any, Concatenate, Self, TypeVar, get_args, get_origin
 from weakref import WeakKeyDictionary
 
 
@@ -39,6 +40,34 @@ class Signature[T]:
 
     # Function to choose between two solutions
     choose: Callable[[T, T], T]
+
+    def __or__[R](self, fun: Callable[[Self], R]) -> R:
+        """Use this algebra as the first argument of a pipable function."""
+        return fun(self)
+
+
+def pipable[F, **P, T](
+    func: Callable[Concatenate[F, P], T],
+) -> Callable[P, Callable[[F], T]]:
+    """
+    Transform a function to be usable through an algebra pipe.
+
+    If `func` is a function whose first argument is an algebra, the resulting wrapped
+    function will accept all arguments except the first one, and wait for the algebra
+    argument to be provided on the left through the | operator.
+
+    :param func: function to wrap
+    :returns wrapped function
+    """
+
+    @wraps(func)
+    def rest_func(*args: P.args, **kwargs: P.kwargs) -> Callable[[F], T]:
+        def first_func(first: F) -> T:
+            return func(first, *args, **kwargs)
+
+        return first_func
+
+    return rest_func
 
 
 type Comparator[T] = Callable[[T, T], bool]

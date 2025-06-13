@@ -37,7 +37,7 @@ def test_lex_single():
         join(CostCount, cost=tropical, count=integers),
     )
 
-    select = lex(joined, "cost")
+    select = joined | lex("cost")
 
     assert select.choose(
         CostCount(cost=2, count=10),
@@ -95,8 +95,8 @@ def test_lex_multiple():
         join(CostDistanceCount, cost=tropical, distance=tropical, count=integers),
     )
 
-    sel_cost_distance = lex(joined, "cost", "distance")
-    sel_distance_cost = lex(joined, "distance", "cost")
+    sel_cost_distance = joined | lex("cost", "distance")
+    sel_distance_cost = joined | lex("distance", "cost")
 
     assert sel_cost_distance.choose(
         CostDistanceCount(cost=2, distance=7, count=10),
@@ -154,7 +154,7 @@ def test_lex_none():
         join(CostDistanceCount, cost=tropical, distance=tropical, count=integers),
     )
 
-    lexed_none = lex(joined)
+    lexed_none = joined | lex()
 
     assert lexed_none.choose(
         CostDistanceCount(cost=2, distance=7, count=10),
@@ -190,7 +190,7 @@ def test_lex_invalid():
     with pytest.raises(
         TypeError, match="lex: provided algebra is not a joined algebra"
     ):
-        lex(tropical, "unknown")
+        tropical | lex("unknown")
 
     joined = cast(
         SemiRing[CostCount],
@@ -198,9 +198,9 @@ def test_lex_invalid():
     )
 
     with pytest.raises(TypeError, match="lex: 'unknown' is not a subalgebra field"):
-        lex(joined, "unknown")
+        joined | lex("unknown")
 
-    revselect = lex(joined, "count")
+    revselect = joined | lex("count")
 
     with pytest.raises(TypeError, match="lex: order for field 'count' is not total"):
         assert revselect.choose(
@@ -229,14 +229,14 @@ def test_lex_metadata():
     )
     subalgebras = get_algebra_metadata(joined, join)
 
-    select_cost = lex(joined, "cost")
+    select_cost = joined | lex("cost")
     assert get_algebra_metadata(select_cost, lex) == (joined, ("cost",))
     assert get_algebra_metadata(select_cost, join) == subalgebras
 
-    select_cost_count = lex(select_cost, "count")
+    select_cost_count = joined | lex("cost") | lex("count")
     assert get_algebra_metadata(select_cost_count, lex) == (joined, ("count", "cost"))
     assert get_algebra_metadata(select_cost_count, join) == subalgebras
 
-    select_cost_count2 = lex(joined, "count", "cost")
+    select_cost_count2 = joined | lex("count", "cost")
     assert get_algebra_metadata(select_cost_count2, lex) == (joined, ("count", "cost"))
     assert get_algebra_metadata(select_cost_count2, join) == subalgebras

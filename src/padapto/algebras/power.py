@@ -16,6 +16,7 @@ from .signature import (
     copy_algebra_metadata,
     make_checked_operator,
     make_natural_order,
+    pipable,
     set_algebra_metadata,
 )
 
@@ -98,6 +99,7 @@ def _power_operator[T, U](
     return Multiset(result)
 
 
+@pipable
 def power[S: Signature[Any]](
     algebra: S, order: Comparator[Any] | bool | None = None
 ) -> S:
