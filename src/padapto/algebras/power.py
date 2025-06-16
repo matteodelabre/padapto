@@ -26,6 +26,7 @@ def _merge_multisets[T](
     left: Multiset[T],
     right: Multiset[T],
 ) -> Multiset[T]:
+    """Merge two multisets in sorted order."""
     result: list[T | None] = [None] * (len(left) + len(right))
     left_idx = 0
     right_idx = 0
@@ -101,7 +102,7 @@ def _power_operator[T, U](
 
 @pipable
 def power[S: Signature[Any]](
-    algebra: S, order: Comparator[Any] | bool | None = None
+    algebra: S, order: Comparator[Any] | bool = False
 ) -> S:
     """
     Take the power set of an algebra.
@@ -122,8 +123,8 @@ def power[S: Signature[Any]](
 
     :param algebra: original algebra
     :param order: sort the set elements according to this order (if True, use the
-        natural ordering of the original algebra; if None, do not sort the elements;
-        the default is None)
+        natural ordering of the original algebra; if False, do not sort the elements;
+        the default is False)
     :returns: created algebra
     """
     if order is True:
