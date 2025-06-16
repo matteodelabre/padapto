@@ -68,6 +68,45 @@ def test_join_plain_semirings() -> None:
     )
 
 
+def test_join_plain_nested():
+    tropical = SemiRing[int | float](
+        null=lambda: inf,
+        choose=min,
+        unit=lambda: 0,
+        combine=operator.add,
+    )
+    integers = SemiRing[int](
+        null=lambda: 0,
+        choose=operator.add,
+        unit=lambda: 1,
+        combine=operator.mul,
+    )
+
+    join1 = cast(SemiRing[Record], join(left=tropical, right=integers))
+    join2 = cast(SemiRing[Record], join(couple=join1, single=tropical))
+
+    assert join2.null() == Record(couple=Record(left=inf, right=0), single=inf)
+    assert join2.unit() == Record(couple=Record(left=0, right=1), single=0)
+    assert join2.choose(
+        Record(couple=Record(left=2, right=5), single=7),
+        Record(couple=Record(left=11, right=3), single=5),
+    ) == Record(couple=Record(left=min(2, 11), right=3 + 5), single=min(5, 7))
+    assert join2.combine(
+        Record(couple=Record(left=2, right=5), single=7),
+        Record(couple=Record(left=11, right=3), single=5),
+    ) == Record(couple=Record(left=2 + 11, right=3 * 5), single=5 + 7)
+
+    check_semiring(
+        join2,
+        (
+            Record(couple=Record(left=2, right=5), single=7),
+            Record(couple=Record(left=11, right=3), single=5),
+            Record(couple=Record(left=0, right=7), single=3),
+        ),
+        conservative=False,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TypedRecord:
     first: int | float
