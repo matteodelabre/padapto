@@ -23,36 +23,52 @@ from .signature import (
 
 def _merge_multisets[T](
     compare: Comparator[T],
+    unique: bool,
     left: Multiset[T],
     right: Multiset[T],
 ) -> Multiset[T]:
-    """Merge two multisets in sorted order."""
+    """
+    Merge two multisets in sorted order.
+
+    :param compare: binary comparator function indicating whether lhs <= rhs
+    :param unique: if true, duplicates are removed
+    :param left: first multiset to merge
+    :param right: second multiset to merge
+    :return: merged values in sorted order
+    """
     result: list[T | None] = [None] * (len(left) + len(right))
+    place = 0
     left_idx = 0
     right_idx = 0
 
-    for place in range(len(result)):
+    while left_idx < len(left) or right_idx < len(right):
         if right_idx == len(right):
             result[place] = left[left_idx]
             left_idx += 1
-            continue
-
-        if left_idx == len(left):
+        elif left_idx == len(left):
             result[place] = right[right_idx]
             right_idx += 1
-            continue
-
-        left_item = left[left_idx]
-        right_item = right[right_idx]
-
-        if compare(right_item, left_item) and not compare(left_item, right_item):
-            result[place] = right_item
-            right_idx += 1
         else:
-            result[place] = left_item
-            left_idx += 1
+            left_item = left[left_idx]
+            right_item = right[right_idx]
 
-    return Multiset(cast(list[T], result))
+            left_le_right = compare(left_item, right_item)
+            right_le_left = compare(right_item, left_item)
+
+            if left_le_right and right_le_left and unique:
+                result[place] = left_item
+                left_idx += 1
+                right_idx += 1
+            elif right_le_left and not left_le_right:
+                result[place] = right_item
+                right_idx += 1
+            else:
+                result[place] = left_item
+                left_idx += 1
+
+        place += 1
+
+    return Multiset(cast(list[T], result[:place]))
 
 
 def _compare_to_key[T](
@@ -81,6 +97,7 @@ def _compare_to_key[T](
 def _power_operator[T, U](
     operator: Operator[T],
     compare: Comparator[T] | None,
+    unique: bool,
     args: tuple[Any, ...],
     args_types: tuple[type[Any], ...],
 ) -> Multiset[T]:
@@ -97,22 +114,27 @@ def _power_operator[T, U](
     if compare is not None:
         result.sort(key=_compare_to_key(compare))
 
+    if unique:
+        result = list(dict.fromkeys(result))
+
     return Multiset(result)
 
 
 @pipable
 def power[S: Signature[Any]](
-    algebra: S, order: Comparator[Any] | bool = False
+    algebra: S, order: Comparator[Any] | bool = False, unique: bool = False
 ) -> S:
     """
     Take the power set of an algebra.
 
     Given an algebra on a type T, this function creates an algebra with the same
-    signature valued over sets of T. When choosing between two sets of values, the union
-    of both is taken. When combining multiple sets of values, the original algebra
-    function is called for each element of the Cartesian product of the sets.
+    signature valued over multisets of T. When choosing between two sets of values, the
+    union of both is taken. When combining multiple sets of values, the original algebra
+    function is called for each element of the Cartesian product of the multisets.
 
-    If an order is provided, the multisets elements are ordered according to this order.
+    If an order is provided, the multisets elements are ordered according to this order
+    (multisets have an intrinsic order, but two multisets containing the same elements
+    in a different order are considered to be equal).
 
     This algebra is valid if the original algebra is valid.
 
@@ -122,9 +144,11 @@ def power[S: Signature[Any]](
     <https://github.com/python/typing/issues/548>).
 
     :param algebra: original algebra
-    :param order: sort the set elements according to this order (if True, use the
+    :param order: sort the multiset elements according to this order (if True, use the
         natural ordering of the original algebra; if False, do not sort the elements;
         the default is False)
+    :param unique: remove the duplicate values from the multiset (the default is to keep
+        duplicates)
     :returns: created algebra
     """
     if order is True:
@@ -139,13 +163,15 @@ def power[S: Signature[Any]](
 
     for field in dataclasses.fields(signature):
         original = getattr(algebra, field.name)
-        op = partial(_power_operator, original, compare)
+        op = partial(_power_operator, original, compare, unique)
         elements[field.name] = make_checked_operator(field.type, Multiset, op)
 
     elements["null"] = cast(Callable[[], Multiset[Any]], lambda: Multiset())
 
     if compare is not None:
-        elements["choose"] = partial(_merge_multisets, compare)
+        elements["choose"] = partial(_merge_multisets, compare, unique)
+    elif unique:
+        elements["choose"] = lambda left, right: Multiset(dict.fromkeys(left + right))
     else:
         elements["choose"] = operator.add
 

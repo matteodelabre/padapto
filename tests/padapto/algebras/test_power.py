@@ -78,6 +78,79 @@ def test_power_order() -> None:
     check_semiring(all_trop, sample_values, conservative=False)
 
 
+def test_power_unique() -> None:
+    tropical = SemiRing[int | float](
+        null=lambda: inf,
+        choose=min,
+        unit=lambda: 0,
+        combine=operator.add,
+    )
+
+    all_trop = cast(SemiRing[Multiset[int | float]], tropical | power(unique=True))
+
+    assert all_trop.null() == Multiset()
+    assert all_trop.unit() == Multiset((0,))
+
+    assert all_trop.choose(
+        Multiset((2, 3, 13)),
+        Multiset((3, 5, 17)),
+    ) == Multiset((2, 3, 13, 5, 17))
+
+    assert all_trop.combine(
+        Multiset((2, 3, 13)),
+        Multiset((2, 3, 13)),
+    ) == Multiset((2 + 2, 2 + 3, 2 + 13, 3 + 3, 3 + 13, 13 + 13))
+
+    sample_values: tuple[Multiset[int | float], ...] = (
+        Multiset((7,)),
+        Multiset((5, 7, 23)),
+        Multiset((7, 13, 17)),
+    )
+    check_semiring(all_trop, sample_values, conservative=False)
+
+
+def test_power_order_unique() -> None:
+    tropical = SemiRing[int | float](
+        null=lambda: inf,
+        choose=min,
+        unit=lambda: 0,
+        combine=operator.add,
+    )
+
+    all_trop = cast(
+        SemiRing[Multiset[int | float]], tropical | power(order=True, unique=True)
+    )
+
+    assert all_trop.null() == Multiset()
+    assert all_trop.unit() == Multiset((0,))
+
+    assert list(
+        all_trop.choose(Multiset((2, 3, 13)), Multiset((3, 5, 17)))
+    ) == [2, 3, 5, 13, 17]
+
+    assert list(
+        all_trop.choose(Multiset((2, 3, 13)), Multiset((13, 15, 17)))
+    ) == [2, 3, 13, 15, 17]
+
+    assert list(
+        all_trop.choose(Multiset((13, 15, 17)), Multiset((2, 3, 13)))
+    ) == [2, 3, 13, 15, 17]
+
+    assert list(all_trop.choose(Multiset((13, 15, 17)), Multiset(()))) == [13, 15, 17]
+    assert list(all_trop.choose(Multiset(()), Multiset((13, 15, 17)))) == [13, 15, 17]
+
+    assert list(
+        all_trop.combine(Multiset((2, 3, 13)), Multiset((2, 3, 13)))
+    ) == [2 + 2, 2 + 3, 3 + 3, 2 + 13, 3 + 13, 13 + 13]
+
+    sample_values: tuple[Multiset[int | float], ...] = (
+        Multiset((7,)),
+        Multiset((5, 7, 23)),
+        Multiset((7, 13, 17)),
+    )
+    check_semiring(all_trop, sample_values, conservative=False)
+
+
 def test_power_generate() -> None:
     free = SemiRing[tuple[str, ...] | None](
         null=lambda: None,
