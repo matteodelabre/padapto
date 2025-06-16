@@ -12,7 +12,9 @@ from padapto.collections import Multiset, Record
 class EditionSignature[T](Signature[T]):
     unit: Callable[[], T]
     combine: Callable[[T, T], T]
-    compare: Callable[[str | None, str | None], T]
+    match: Callable[[str, str], T]
+    delete: Callable[[str], T]
+    insert: Callable[[str], T]
 
 
 def edition[T](
@@ -34,14 +36,14 @@ def edition[T](
 
             if i >= 1 and j >= 1:
                 change = alg.combine(
-                    table[(i - 1, j - 1)], alg.compare(word1[i - 1], word2[j - 1])
+                    table[(i - 1, j - 1)], alg.match(word1[i - 1], word2[j - 1])
                 )
 
             if i >= 1:
-                delete = alg.combine(table[(i - 1, j)], alg.compare(word1[i - 1], None))
+                delete = alg.combine(table[(i - 1, j)], alg.delete(word1[i - 1]))
 
             if j >= 1:
-                insert = alg.combine(table[(i, j - 1)], alg.compare(None, word2[j - 1]))
+                insert = alg.combine(table[(i, j - 1)], alg.insert(word2[j - 1]))
 
             table[(i, j)] = alg.multichoose(change, delete, insert)
 
@@ -49,6 +51,31 @@ def edition[T](
 
 
 if __name__ == "__main__":
+    # Compute the minimum cost of an alignment, using unit costs
+    min_cost = EditionSignature[int | float](
+        null=lambda: inf,
+        choose=min,
+        unit=lambda: 0,
+        combine=operator.add,
+        match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
+        delete=lambda sym: 1,
+        insert=lambda sym: 1,
+    )
+
+    assert edition(min_cost, "ab", "bc") == 2
+    assert edition(min_cost, "elephant", "relevant") == 3
+
+    # Compute the cost of all alignments, in increasing order
+    all_min_costs = min_cost | power(order=True)
+
+    assert edition(all_min_costs, "ab", "bc") == Multiset(
+        (2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4)
+    )
+
+    # Compute the cost of the 5 best alignments
+    five_best_costs = min_cost | power(order=True) | limit(5)
+    assert edition(five_best_costs, "ab", "bc") == Multiset((2, 2, 3, 3, 3))
+
     # Count the number of possible alignments of two sequences
     # See: Laquer H. Turner, (1981), Asymptotic Limits for a Two-Dimensional Recursion
     # See: OEIS entry A001850
@@ -57,7 +84,9 @@ if __name__ == "__main__":
         choose=operator.add,
         unit=lambda: 1,
         combine=operator.mul,
-        compare=lambda source, target: 1,
+        match=lambda sym1, sym2: 1,
+        delete=lambda sym: 1,
+        insert=lambda sym: 1,
     )
 
     assert edition(count, "", "") == 1
@@ -76,12 +105,14 @@ if __name__ == "__main__":
         choose=lambda x, y: y if x is None else x,
         unit=lambda: (),
         combine=lambda x, y: x + y if x is not None and y is not None else None,
-        compare=lambda source, target: ((source, target),),
+        match=lambda sym1, sym2: (("match", sym1, sym2),),
+        delete=lambda sym: (("delete", sym),),
+        insert=lambda sym: (("insert", sym),),
     )
 
     assert edition(one_align, "", "") == ()
-    assert edition(one_align, "ab", "b") == (("a", None), ("b", "b"))
-    assert edition(one_align, "ab", "bc") == (("a", "b"), ("b", "c"))
+    assert edition(one_align, "ab", "b") == (("delete", "a"), ("match", "b", "b"))
+    assert edition(one_align, "ab", "bc") == (("match", "a", "b"), ("match", "b", "c"))
 
     # Generate all possible alignments
     all_aligns = one_align | power()
@@ -89,50 +120,30 @@ if __name__ == "__main__":
     assert edition(all_aligns, "", "") == Multiset(((),))
     assert edition(all_aligns, "a", "b") == Multiset(
         (
-            (("a", "b"),),
-            (("a", None), (None, "b")),
-            ((None, "b"), ("a", None)),
+            (("match", "a", "b"),),
+            (("delete", "a"), ("insert", "b")),
+            (("insert", "b"), ("delete", "a")),
         )
     )
     assert len(edition(all_aligns, "abcdef", "abcdef")) == 8989
     assert len(set(edition(all_aligns, "abcdef", "abcdef"))) == 8989
 
-    # Compute the minimum cost of an alignment, using unit costs
     def cost_of(align: Align) -> int:
-        return sum(1 if source != target else 0 for source, target in align)
+        return sum(
+            0 if kind == "match" and rest[0] == rest[1] else 1 for kind, *rest in align
+        )
 
-    assert cost_of((("a", "a"), ("b", "b"))) == 0
-    assert cost_of((("a", "a"), ("b", "c"))) == 1
-    assert cost_of((("a", None), ("b", "c"))) == 2
-    assert cost_of((("a", None), (None, "a"), ("b", "b"))) == 2
+    assert cost_of((("match", "a", "a"), ("match", "b", "b"))) == 0
+    assert cost_of((("match", "a", "a"), ("match", "b", "c"))) == 1
+    assert cost_of((("delete", "a"), ("match", "b", "c"))) == 2
+    assert cost_of((("delete", "a"), ("insert", "a"), ("match", "b", "b"))) == 2
 
-    min_cost = EditionSignature[int | float](
-        null=lambda: inf,
-        choose=min,
-        unit=lambda: 0,
-        combine=operator.add,
-        compare=lambda source, target: 1 if source != target else 0,
-    )
-
-    assert edition(min_cost, "ab", "bc") == 2
-    assert edition(min_cost, "elephant", "relevant") == 3
     assert edition(min_cost, "abba", "abab") == min(
         cost_of(align) for align in edition(all_aligns, "abba", "abab")
-    )
-
-    # Compute the cost of all alignments, in increasing order
-    all_min_costs = min_cost | power(order=True)
-
-    assert edition(all_min_costs, "ab", "bc") == Multiset(
-        (2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4)
     )
     assert edition(all_min_costs, "abba", "abab") == Multiset(
         cost_of(align) for align in edition(all_aligns, "abba", "abab")
     )
-
-    # Compute the cost of the 5 best alignments
-    five_best_costs = min_cost | power(order=True) | limit(5)
-    assert edition(five_best_costs, "ab", "bc") == Multiset((2, 2, 3, 3, 3))
 
     # Compute the number of alignments of minimum cost
     min_cost_count = join(cost=min_cost, count=count) | lex("cost")
@@ -148,8 +159,8 @@ if __name__ == "__main__":
         cost=2,
         solutions=Multiset(
             (
-                (("a", "b"), ("b", "c")),
-                (("a", None), ("b", "b"), (None, "c")),
+                (("match", "a", "b"), ("match", "b", "c")),
+                (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
             )
         ),
     )
@@ -158,26 +169,26 @@ if __name__ == "__main__":
         solutions=Multiset(
             (
                 (
-                    (None, "r"),
-                    ("e", "e"),
-                    ("l", "l"),
-                    ("e", "e"),
-                    ("p", "v"),
-                    ("h", None),
-                    ("a", "a"),
-                    ("n", "n"),
-                    ("t", "t"),
+                    ("insert", "r"),
+                    ("match", "e", "e"),
+                    ("match", "l", "l"),
+                    ("match", "e", "e"),
+                    ("match", "p", "v"),
+                    ("delete", "h"),
+                    ("match", "a", "a"),
+                    ("match", "n", "n"),
+                    ("match", "t", "t"),
                 ),
                 (
-                    (None, "r"),
-                    ("e", "e"),
-                    ("l", "l"),
-                    ("e", "e"),
-                    ("p", None),
-                    ("h", "v"),
-                    ("a", "a"),
-                    ("n", "n"),
-                    ("t", "t"),
+                    ("insert", "r"),
+                    ("match", "e", "e"),
+                    ("match", "l", "l"),
+                    ("match", "e", "e"),
+                    ("delete", "p"),
+                    ("match", "h", "v"),
+                    ("match", "a", "a"),
+                    ("match", "n", "n"),
+                    ("match", "t", "t"),
                 ),
             )
         ),
@@ -186,10 +197,33 @@ if __name__ == "__main__":
         cost=2,
         solutions=Multiset(
             (
-                (("a", "a"), ("b", "b"), ("b", "a"), ("a", "b")),
-                (("a", "a"), ("b", "b"), (None, "a"), ("b", "b"), ("a", None)),
-                (("a", "a"), ("b", None), ("b", "b"), ("a", "a"), (None, "b")),
-                (("a", "a"), ("b", "b"), ("b", None), ("a", "a"), (None, "b")),
+                (
+                    ("match", "a", "a"),
+                    ("match", "b", "b"),
+                    ("match", "b", "a"),
+                    ("match", "a", "b"),
+                ),
+                (
+                    ("match", "a", "a"),
+                    ("match", "b", "b"),
+                    ("insert", "a"),
+                    ("match", "b", "b"),
+                    ("delete", "a"),
+                ),
+                (
+                    ("match", "a", "a"),
+                    ("delete", "b"),
+                    ("match", "b", "b"),
+                    ("match", "a", "a"),
+                    ("insert", "b"),
+                ),
+                (
+                    ("match", "a", "a"),
+                    ("match", "b", "b"),
+                    ("delete", "b"),
+                    ("match", "a", "a"),
+                    ("insert", "b"),
+                ),
             )
         ),
     )
@@ -217,15 +251,11 @@ if __name__ == "__main__":
     def operations_of(align: Align) -> Record:
         return Record(
             changes=sum(
-                (
-                    1
-                    if source is not None and target is not None and source != target
-                    else 0
-                )
-                for source, target in align
+                1 if kind == "match" and rest[0] != rest[1] else 0
+                for kind, *rest in align
             ),
-            deletes=sum(1 if target is None else 0 for source, target in align),
-            inserts=sum(1 if source is None else 0 for source, target in align),
+            deletes=sum(1 if kind == "delete" else 0 for kind, *_ in align),
+            inserts=sum(1 if kind == "insert" else 0 for kind, *_ in align),
         )
 
     def pareto_filter(vecs: Multiset[Record]) -> Multiset[Record]:
@@ -242,32 +272,36 @@ if __name__ == "__main__":
             )
         )
 
-    assert operations_of((("a", "a"), ("b", "b"))) == Record(
+    assert operations_of((("match", "a", "a"), ("match", "b", "b"))) == Record(
         changes=0, deletes=0, inserts=0
     )
-    assert operations_of((("a", "a"), ("b", "c"))) == Record(
+    assert operations_of((("match", "a", "a"), ("match", "b", "c"))) == Record(
         changes=1, deletes=0, inserts=0
     )
-    assert operations_of((("a", None), ("b", "c"))) == Record(
+    assert operations_of((("delete", "a"), ("match", "b", "c"))) == Record(
         changes=1, deletes=1, inserts=0
     )
-    assert operations_of((("a", None), (None, "a"), ("b", "b"))) == Record(
-        changes=0, deletes=1, inserts=1
-    )
+    assert operations_of(
+        (("delete", "a"), ("insert", "a"), ("match", "b", "b"))
+    ) == Record(changes=0, deletes=1, inserts=1)
 
     min_change = replace(
         min_cost,
-        compare=lambda source, target: (
-            1 if source is not None and target is not None and source != target else 0
-        ),
+        match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
+        delete=lambda sym: 0,
+        insert=lambda sym: 0,
     )
     min_delete = replace(
         min_cost,
-        compare=lambda source, target: 1 if target is None else 0,
+        match=lambda sym1, sym2: 0,
+        delete=lambda sym: 1,
+        insert=lambda sym: 0,
     )
     min_insert = replace(
         min_cost,
-        compare=lambda source, target: 1 if source is None else 0,
+        match=lambda sym1, sym2: 0,
+        delete=lambda sym: 0,
+        insert=lambda sym: 1,
     )
     par_operations = (
         join(changes=min_change, deletes=min_delete, inserts=min_insert)
