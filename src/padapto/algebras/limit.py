@@ -23,7 +23,7 @@ def _limit_wrap_operator[T](
 
 
 @pipable
-def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int) -> S:
+def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int | None) -> S:
     """
     Limit the number of entries in each value of a power algebra.
 
@@ -33,9 +33,12 @@ def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int) -> S:
     is upper bounded by the parameter.
 
     :param alg: original algebra
-    :param maxsize: maximum size of sets to yield
+    :param maxsize: maximum size of sets to yield, or None to disable limiting
     :returns: limited algebra
     """
+    if maxsize is None:
+        return algebra
+
     signature = type(algebra)
     result = signature(
         **{

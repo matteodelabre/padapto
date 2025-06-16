@@ -37,6 +37,17 @@ def test_limit() -> None:
     assert all_results == algo(gen_all | limit(maxsize=len(all_results)))
 
 
+def test_limit_none() -> None:
+    free = SemiRing[tuple[str, ...] | None](
+        null=lambda: None,
+        choose=lambda x, y: x if x is not None else y,
+        unit=lambda: (),
+        combine=lambda x, y: x + y if x is not None and y is not None else None,
+    )
+    gen_all = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
+    assert gen_all | limit(None) == gen_all
+
+
 def test_limit_metadata():
     free = SemiRing[tuple[str, ...] | None](
         null=lambda: None,
