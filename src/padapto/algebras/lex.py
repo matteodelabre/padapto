@@ -2,15 +2,13 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any
 
-from .join import join
 from .signature import (
     Comparator,
     Signature,
-    copy_algebra_metadata,
-    get_algebra_metadata,
+    extract_algebra_parent,
     make_natural_order,
     pipable,
-    set_algebra_metadata,
+    trace,
 )
 
 
@@ -41,6 +39,7 @@ def _make_lex_choice[T](
 
 
 @pipable
+@trace(transparent=True)
 def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]]) -> S:
     """
     Select between values based on a lexicographical order in a joined algebra.
@@ -70,7 +69,7 @@ def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]
         of that subalgebra is conservative)
     :returns: new transformed algebra
     """
-    if (subalgebras := get_algebra_metadata(algebra, join)) is None:
+    if (subalgebras := extract_algebra_parent(algebra, "join", kwargs=True)) is None:
         raise TypeError("lex: provided algebra is not a joined algebra")
 
     choose = algebra.choose
@@ -89,12 +88,4 @@ def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]
 
         choose = _make_lex_choice(choose, field, compare)
 
-    result = dataclasses.replace(algebra, choose=choose)
-    copy_algebra_metadata(algebra, result)
-
-    if (prev_lex := get_algebra_metadata(result, lex)) is not None:
-        set_algebra_metadata(result, lex, (prev_lex[0], fields + prev_lex[1]))
-    else:
-        set_algebra_metadata(result, lex, (algebra, fields))
-
-    return result
+    return dataclasses.replace(algebra, choose=choose)

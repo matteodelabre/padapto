@@ -8,7 +8,7 @@ import pytest
 from immutables import Map
 
 from padapto.algebras.join import join
-from padapto.algebras.signature import Signature, get_algebra_metadata
+from padapto.algebras.signature import Signature, get_algebra_parent
 from padapto.collections import Record
 
 from .test_signature import SemiRing, check_semiring
@@ -329,9 +329,13 @@ def test_join_metadata():
     joined = cast(
         SemiRing[TypedRecord], join(TypedRecord, first=tropical, second=integers)
     )
-    assert get_algebra_metadata(joined, join) == Map(
-        {
-            "first": tropical,
-            "second": integers,
-        }
+    assert get_algebra_parent(joined) == (
+        "join",
+        (TypedRecord,),
+        Map(
+            {
+                "first": tropical,
+                "second": integers,
+            }
+        ),
     )

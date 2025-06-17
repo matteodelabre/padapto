@@ -3,10 +3,12 @@ from dataclasses import dataclass
 from math import inf
 from typing import cast
 
+from immutables import Map
+
 from padapto.algebras.join import join
 from padapto.algebras.lex import lex
 from padapto.algebras.power import power
-from padapto.algebras.signature import get_algebra_metadata
+from padapto.algebras.signature import get_algebra_parent
 from padapto.collections import Multiset
 
 from .test_signature import SemiRing, check_semiring
@@ -124,24 +126,41 @@ def test_power_order_unique() -> None:
     assert all_trop.null() == Multiset()
     assert all_trop.unit() == Multiset((0,))
 
-    assert list(
-        all_trop.choose(Multiset((2, 3, 13)), Multiset((3, 5, 17)))
-    ) == [2, 3, 5, 13, 17]
+    assert list(all_trop.choose(Multiset((2, 3, 13)), Multiset((3, 5, 17)))) == [
+        2,
+        3,
+        5,
+        13,
+        17,
+    ]
 
-    assert list(
-        all_trop.choose(Multiset((2, 3, 13)), Multiset((13, 15, 17)))
-    ) == [2, 3, 13, 15, 17]
+    assert list(all_trop.choose(Multiset((2, 3, 13)), Multiset((13, 15, 17)))) == [
+        2,
+        3,
+        13,
+        15,
+        17,
+    ]
 
-    assert list(
-        all_trop.choose(Multiset((13, 15, 17)), Multiset((2, 3, 13)))
-    ) == [2, 3, 13, 15, 17]
+    assert list(all_trop.choose(Multiset((13, 15, 17)), Multiset((2, 3, 13)))) == [
+        2,
+        3,
+        13,
+        15,
+        17,
+    ]
 
     assert list(all_trop.choose(Multiset((13, 15, 17)), Multiset(()))) == [13, 15, 17]
     assert list(all_trop.choose(Multiset(()), Multiset((13, 15, 17)))) == [13, 15, 17]
 
-    assert list(
-        all_trop.combine(Multiset((2, 3, 13)), Multiset((2, 3, 13)))
-    ) == [2 + 2, 2 + 3, 3 + 3, 2 + 13, 3 + 13, 13 + 13]
+    assert list(all_trop.combine(Multiset((2, 3, 13)), Multiset((2, 3, 13)))) == [
+        2 + 2,
+        2 + 3,
+        3 + 3,
+        2 + 13,
+        3 + 13,
+        13 + 13,
+    ]
 
     sample_values: tuple[Multiset[int | float], ...] = (
         Multiset((7,)),
@@ -315,4 +334,4 @@ def test_power_metadata():
     )
 
     generator = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
-    assert get_algebra_metadata(generator, power) == free
+    assert get_algebra_parent(generator) == ("power", (free,), Map())

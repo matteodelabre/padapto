@@ -13,11 +13,10 @@ from .signature import (
     Comparator,
     Operator,
     Signature,
-    copy_algebra_metadata,
     make_checked_operator,
     make_natural_order,
     pipable,
-    set_algebra_metadata,
+    trace,
 )
 
 
@@ -121,8 +120,9 @@ def _power_operator[T, U](
 
 
 @pipable
+@trace()
 def power[S: Signature[Any]](
-    algebra: S, order: Comparator[Any] | bool = False, unique: bool = False
+    algebra: S, *, order: Comparator[Any] | bool = False, unique: bool = False
 ) -> S:
     """
     Take the power set of an algebra.
@@ -166,16 +166,20 @@ def power[S: Signature[Any]](
         op = partial(_power_operator, original, compare, unique)
         elements[field.name] = make_checked_operator(field.type, Multiset, op)
 
-    elements["null"] = cast(Callable[[], Multiset[Any]], lambda: Multiset())
+    def null() -> Multiset[Any]:
+        return Multiset()
+
+    elements["null"] = null
 
     if compare is not None:
         elements["choose"] = partial(_merge_multisets, compare, unique)
     elif unique:
-        elements["choose"] = lambda left, right: Multiset(dict.fromkeys(left + right))
+
+        def choose(left: Multiset[Any], right: Multiset[Any]) -> Multiset[Any]:
+            return Multiset(dict.fromkeys(left + right))
+
+        elements["choose"] = choose
     else:
         elements["choose"] = operator.add
 
-    result = signature(**elements)
-    copy_algebra_metadata(algebra, result)
-    set_algebra_metadata(result, power, algebra)
-    return result
+    return signature(**elements)

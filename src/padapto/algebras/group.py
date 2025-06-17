@@ -4,15 +4,12 @@ from functools import partial
 from typing import Any
 
 from ..collections import Multiset
-from .join import join
-from .power import power
 from .signature import (
     Operator,
     Signature,
-    copy_algebra_metadata,
-    get_algebra_metadata,
+    extract_algebra_parent,
     pipable,
-    set_algebra_metadata,
+    trace,
 )
 
 
@@ -43,6 +40,7 @@ def _group_operator[T](
 
 
 @pipable
+@trace(transparent=True)
 def group[S: Signature[Multiset[Any]]](
     algebra: S,
     *fields: str,
@@ -51,8 +49,8 @@ def group[S: Signature[Multiset[Any]]](
     Group values on sets of fields in the powerset of a joined algebra.
 
     After any operation in the algebra, the resulting multiset is traversed so that
-    values that are equal on the given set of fields get grouped together. The values in
-    other fields get combined using the original choice function.
+    values that are equal on the given set of fields get grouped together. Grouped
+    values get combined using the original choice function.
 
     The resulting algebra is valid if the given algebra is valid.
 
@@ -60,10 +58,10 @@ def group[S: Signature[Multiset[Any]]](
     :param fields: fields with respect to which to group
     :returns: new transformed algebra
     """
-    if (joined_algebra := get_algebra_metadata(algebra, power)) is None:
+    if (joined := extract_algebra_parent(algebra, "power", index=0)) is None:
         raise TypeError("group: provided algebra is not a power algebra")
 
-    if (subalgebras := get_algebra_metadata(algebra, join)) is None:
+    if (subalgebras := extract_algebra_parent(joined, "join", kwargs=True)) is None:
         raise TypeError("group: provided algebra is not a joined algebra")
 
     for field in fields:
@@ -71,17 +69,14 @@ def group[S: Signature[Multiset[Any]]](
             raise TypeError(f"group: '{field}' is not a subalgebra field")
 
     signature = type(algebra)
-    result = signature(
+    return signature(
         **{
             field.name: partial(
                 _group_operator,
                 getattr(algebra, field.name),
                 fields,
-                joined_algebra.choose,
+                joined.choose,
             )
             for field in dataclasses.fields(signature)
         }
     )
-    copy_algebra_metadata(algebra, result)
-    set_algebra_metadata(result, group, (algebra, fields))
-    return result

@@ -5,10 +5,8 @@ from ..collections import Multiset
 from .signature import (
     Operator,
     Signature,
-    copy_algebra_metadata,
-    get_algebra_metadata,
     pipable,
-    set_algebra_metadata,
+    trace,
 )
 
 
@@ -23,6 +21,7 @@ def _limit_wrap_operator[T](
 
 
 @pipable
+@trace(transparent=True)
 def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int | None) -> S:
     """
     Limit the number of entries in each value of a power algebra.
@@ -40,19 +39,9 @@ def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int | None) -> S:
         return algebra
 
     signature = type(algebra)
-    result = signature(
+    return signature(
         **{
             field.name: _limit_wrap_operator(maxsize, getattr(algebra, field.name))
             for field in dataclasses.fields(signature)
         }
     )
-
-    copy_algebra_metadata(algebra, result)
-
-    if (og_limit := get_algebra_metadata(result, limit)) is not None:
-        og_algebra, og_maxsize = og_limit
-        set_algebra_metadata(result, limit, (og_algebra, min(maxsize, og_maxsize)))
-    else:
-        set_algebra_metadata(result, limit, (algebra, maxsize))
-
-    return result

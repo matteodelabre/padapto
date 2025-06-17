@@ -3,10 +3,8 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any, TypeVar
 
-from immutables import Map
-
 from ..collections import Record
-from .signature import Operator, Signature, make_checked_operator, set_algebra_metadata
+from .signature import Operator, Signature, make_checked_operator, trace
 
 
 def _joined_operator[T](
@@ -33,6 +31,7 @@ def _joined_operator[T](
     )
 
 
+@trace()
 def join[S: Signature[Any]](
     record_type: type[Any] = Record,
     **subalgebras: S,
@@ -81,8 +80,4 @@ def join[S: Signature[Any]](
         op = partial(_joined_operator, record_type, suboperators)
         elements[field.name] = make_checked_operator(field.type, record_type, op)
 
-    return set_algebra_metadata(
-        signature(**elements),
-        join,
-        Map(subalgebras),
-    )
+    return signature(**elements)

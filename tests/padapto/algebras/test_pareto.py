@@ -5,7 +5,7 @@ from math import inf
 from padapto.algebras.join import join
 from padapto.algebras.pareto import pareto
 from padapto.algebras.power import power
-from padapto.algebras.signature import get_algebra_metadata
+from padapto.algebras.signature import get_algebra_parent
 from padapto.collections import Multiset
 
 from .test_signature import SemiRing, check_semiring
@@ -256,6 +256,4 @@ def test_pareto_metadata():
     joined = join(TwoFieldsData, first=tropical, second=tropical, data=integers)
     powerset = joined | power()
     algebra = powerset | pareto("first", "second")
-
-    assert get_algebra_metadata(algebra, pareto) == (powerset, ("first", "second"))
-    assert get_algebra_metadata(algebra, power) == joined
+    assert get_algebra_parent(algebra) == get_algebra_parent(powerset)

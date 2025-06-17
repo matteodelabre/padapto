@@ -1,9 +1,11 @@
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from functools import reduce, wraps
 from types import GenericAlias
 from typing import Any, Concatenate, Self, TypeVar, get_args, get_origin
 from weakref import WeakKeyDictionary
+
+from immutables import Map
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,32 +176,71 @@ def make_checked_operator[T](
     return checked_operator
 
 
-_algebra_metadata_registry: MutableMapping[Signature[Any], dict[Any, Any]] = (
-    WeakKeyDictionary()
-)
+type CallTrace = tuple[str, tuple[Any, ...], Mapping[str, Any]]
+_parent_registry: MutableMapping[Signature[Any], CallTrace] = WeakKeyDictionary()
 
 
-def set_algebra_metadata[S: Signature[Any]](
-    algebra: S,
-    key: Any,
-    value: Any,
-) -> S:
-    """Associate a metadata attribute to an algebra."""
-    if algebra not in _algebra_metadata_registry:
-        _algebra_metadata_registry[algebra] = {}
+def trace(transparent: bool = False):
+    """
+    Tranform an algebra-producing function to keep a record of its origin.
 
-    _algebra_metadata_registry[algebra][key] = value
-    return algebra
+    When an algebra `alg` is produced by the wrapped function, the producing function’s
+    name and arguments can be retrieved using the :fun:`get_algebra_parent` function.
+
+    :param transparent: if True, assume that the first argument of the function will be
+        an algebra itself, and inherit the origin of that algebra as the origin of the
+        produced algebra
+    """
+
+    def tracer[S: Signature[Any], **P](func: Callable[P, S]) -> Callable[P, S]:
+        @wraps(func)
+        def traced_func(*args: P.args, **kwargs: P.kwargs) -> S:
+            result = func(*args, **kwargs)
+
+            if transparent:
+                assert isinstance(args[0], Signature)
+
+                if args[0] in _parent_registry:
+                    _parent_registry[result] = _parent_registry[args[0]]
+            else:
+                _parent_registry[result] = (traced_func.__name__, args, Map(kwargs))
+
+            return result
+
+        return traced_func
+
+    return tracer
 
 
-def copy_algebra_metadata[S: Signature[Any]](source: Signature[Any], target: S) -> S:
-    """Copy all metadata attributes from a source algebra to a target algebra."""
-    if source in _algebra_metadata_registry:
-        _algebra_metadata_registry[target] = _algebra_metadata_registry[source].copy()
-
-    return target
+def get_algebra_parent(algebra: Signature[Any]) -> CallTrace | None:
+    """Retrieve the original function used to produce an algebra, if any."""
+    return _parent_registry.get(algebra)
 
 
-def get_algebra_metadata(algebra: Signature[Any], key: Any, default: Any = None) -> Any:
-    """Retrieve a metadata attribute from an algebra given its key."""
-    return _algebra_metadata_registry.get(algebra, {}).get(key, default)
+def extract_algebra_parent(
+    algebra: Signature[Any],
+    maker: str,
+    index: int = 0,
+    kwargs: bool = False,
+) -> Any:
+    """
+    Check that a given algebra has been produced by a function.
+
+    If the function matches, extract the specified argument that was given.
+
+    :param algebra: algebra to check the origin of
+    :param maker: expected producing function
+    :param index: index of the positional argument to extract
+    :param kwargs: if True, extract all keyword arguments
+    :returns: extract arguments if the function matches, None otherwise
+    """
+    if (parent := get_algebra_parent(algebra)) is None:
+        return None
+
+    if parent[0] != maker:
+        return None
+
+    if kwargs:
+        return parent[2]
+    else:
+        return parent[1][index]

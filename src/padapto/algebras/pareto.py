@@ -4,17 +4,14 @@ from typing import Any
 
 from ..collections import Multiset
 from .group import group
-from .join import join
-from .power import power
 from .signature import (
     Comparator,
     Operator,
     Signature,
-    copy_algebra_metadata,
-    get_algebra_metadata,
+    extract_algebra_parent,
     make_natural_order,
     pipable,
-    set_algebra_metadata,
+    trace,
 )
 
 
@@ -52,6 +49,7 @@ def _make_pareto_wrapper[T](
 
 
 @pipable
+@trace(transparent=True)
 def pareto[S: Signature[Multiset[Any]]](
     algebra: S,
     *fields: str | tuple[str, Comparator[Any]],
@@ -79,10 +77,10 @@ def pareto[S: Signature[Multiset[Any]]](
         of that subalgebra is conservative)
     :returns: new transformed algebra
     """
-    if get_algebra_metadata(algebra, power) is None:
+    if (joined := extract_algebra_parent(algebra, "power", index=0)) is None:
         raise TypeError("pareto: provided algebra is not a power algebra")
 
-    if (subalgebras := get_algebra_metadata(algebra, join)) is None:
+    if (subalgebras := extract_algebra_parent(joined, "join", kwargs=True)) is None:
         raise TypeError("pareto: provided algebra is not a joined algebra")
 
     comparators: dict[str, Comparator[Any]] = {}
@@ -104,12 +102,9 @@ def pareto[S: Signature[Multiset[Any]]](
     signature = type(algebra)
     pareto_wrapper = _make_pareto_wrapper(comparators)
     grouped = algebra | group(*comparators.keys())
-    result = signature(
+    return signature(
         **{
             field.name: pareto_wrapper(getattr(grouped, field.name))
             for field in dataclasses.fields(signature)
         }
     )
-    copy_algebra_metadata(grouped, result)
-    set_algebra_metadata(result, pareto, (algebra, fields))
-    return result

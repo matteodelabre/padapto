@@ -7,7 +7,7 @@ import pytest
 
 from padapto.algebras.join import join
 from padapto.algebras.lex import lex
-from padapto.algebras.signature import get_algebra_metadata
+from padapto.algebras.signature import get_algebra_parent
 
 from .test_signature import SemiRing, check_semiring
 
@@ -227,16 +227,12 @@ def test_lex_metadata():
         SemiRing[CostCount],
         join(CostCount, cost=tropical, count=integers),
     )
-    subalgebras = get_algebra_metadata(joined, join)
 
     select_cost = joined | lex("cost")
-    assert get_algebra_metadata(select_cost, lex) == (joined, ("cost",))
-    assert get_algebra_metadata(select_cost, join) == subalgebras
+    assert get_algebra_parent(select_cost) == get_algebra_parent(joined)
 
     select_cost_count = joined | lex("cost") | lex("count")
-    assert get_algebra_metadata(select_cost_count, lex) == (joined, ("count", "cost"))
-    assert get_algebra_metadata(select_cost_count, join) == subalgebras
+    assert get_algebra_parent(select_cost_count) == get_algebra_parent(joined)
 
     select_cost_count2 = joined | lex("count", "cost")
-    assert get_algebra_metadata(select_cost_count2, lex) == (joined, ("count", "cost"))
-    assert get_algebra_metadata(select_cost_count2, join) == subalgebras
+    assert get_algebra_parent(select_cost_count2) == get_algebra_parent(joined)
