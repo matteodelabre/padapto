@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from math import inf
+from typing import Literal
 
 from padapto.algebras import Signature, group, join, lex, limit, pareto, power
 from padapto.collections import Multiset, Record
@@ -50,26 +51,47 @@ def edition[T](
     return table[(n, m)]
 
 
-if __name__ == "__main__":
-    # Compute the minimum cost of an alignment, using unit costs
-    min_cost = EditionSignature[int | float](
-        null=lambda: inf,
-        choose=min,
-        unit=lambda: 0,
-        combine=operator.add,
-        match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
-        delete=lambda sym: 1,
-        insert=lambda sym: 1,
+# Compute the minimum cost of an alignment, using unit costs
+min_cost = EditionSignature[int | float](
+    null=lambda: inf,
+    choose=min,
+    unit=lambda: 0,
+    combine=operator.add,
+    match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
+    delete=lambda sym: 1,
+    insert=lambda sym: 1,
+)
+
+type Align = tuple[
+    tuple[Literal["match"], str, str]
+    | tuple[Literal["delete"], str]
+    | tuple[Literal["insert"], str],
+    ...,
+]
+
+
+def cost_of(align: Align) -> int:
+    return sum(
+        0 if kind == "match" and rest[0] == rest[1] else 1 for kind, *rest in align
     )
 
+
+if __name__ == "__main__":
     assert edition(min_cost, "", "") == 0
     assert edition(min_cost, "ab", "bc") == 2
     assert edition(min_cost, "abba", "abab") == 2
     assert edition(min_cost, "alberta", "camera") == 4
 
-    # Compute the cost of all alignments, in increasing order
-    all_min_costs = min_cost | power(order=True)
+    assert cost_of((("match", "a", "a"), ("match", "b", "b"))) == 0
+    assert cost_of((("match", "a", "a"), ("match", "b", "c"))) == 1
+    assert cost_of((("delete", "a"), ("match", "b", "c"))) == 2
+    assert cost_of((("delete", "a"), ("insert", "a"), ("match", "b", "b"))) == 2
 
+
+# Compute the cost of all alignments, in increasing order
+all_min_costs = min_cost | power(order=True)
+
+if __name__ == "__main__":
     assert edition(all_min_costs, "", "") == Multiset((0,))
     assert edition(all_min_costs, "ab", "bc") == Multiset(
         (2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4)
@@ -77,40 +99,46 @@ if __name__ == "__main__":
     # assert edition(all_min_costs, "abba", "abab") == <... 321 results ...>
     # assert edition(all_min_costs, "alberta", "camera") == <... 19825 results ...>
 
-    # Compute the cost of the 5 best alignments
-    five_best_costs = min_cost | power(order=True) | limit(5)
+
+# Compute the cost of the 5 best alignments
+five_best_costs = min_cost | power(order=True) | limit(5)
+
+if __name__ == "__main__":
     assert edition(five_best_costs, "ab", "bc") == Multiset((2, 2, 3, 3, 3))
 
-    # Count the number of possible alignments of two sequences
-    # See: Laquer H. Turner, (1981), Asymptotic Limits for a Two-Dimensional Recursion
-    # See: OEIS entry A001850
-    count = EditionSignature[int](
-        null=lambda: 0,
-        choose=operator.add,
-        unit=lambda: 1,
-        combine=operator.mul,
-        match=lambda sym1, sym2: 1,
-        delete=lambda sym: 1,
-        insert=lambda sym: 1,
-    )
 
+# Count the number of possible alignments of two sequences
+# See: Laquer H. Turner, (1981), Asymptotic Limits for a Two-Dimensional Recursion
+# See: OEIS entry A001850
+count = EditionSignature[int](
+    null=lambda: 0,
+    choose=operator.add,
+    unit=lambda: 1,
+    combine=operator.mul,
+    match=lambda sym1, sym2: 1,
+    delete=lambda sym: 1,
+    insert=lambda sym: 1,
+)
+
+if __name__ == "__main__":
     assert edition(count, "", "") == 1
     assert edition(count, "ab", "bc") == 13
     assert edition(count, "abba", "abab") == 321
     assert edition(count, "alberta", "camera") == 19825
 
-    # Generate one of the possible alignments
-    type Align = tuple[tuple[str | None, str | None], ...]
-    one_align = EditionSignature[Align | None](
-        null=lambda: None,
-        choose=lambda x, y: y if x is None else x,
-        unit=lambda: (),
-        combine=lambda x, y: x + y if x is not None and y is not None else None,
-        match=lambda sym1, sym2: (("match", sym1, sym2),),
-        delete=lambda sym: (("delete", sym),),
-        insert=lambda sym: (("insert", sym),),
-    )
 
+# Generate one of the possible alignments
+one_align = EditionSignature[Align | None](
+    null=lambda: None,
+    choose=lambda x, y: y if x is None else x,
+    unit=lambda: (),
+    combine=lambda x, y: x + y if x is not None and y is not None else None,
+    match=lambda sym1, sym2: (("match", sym1, sym2),),
+    delete=lambda sym: (("delete", sym),),
+    insert=lambda sym: (("insert", sym),),
+)
+
+if __name__ == "__main__":
     assert edition(one_align, "", "") == ()
     assert edition(one_align, "ab", "bc") == (("match", "a", "b"), ("match", "b", "c"))
     assert edition(one_align, "abba", "abab") == (
@@ -129,9 +157,11 @@ if __name__ == "__main__":
         ("match", "a", "a"),
     )
 
-    # Generate all possible alignments
-    all_aligns = one_align | power()
 
+# Generate all possible alignments
+all_aligns = one_align | power()
+
+if __name__ == "__main__":
     assert edition(all_aligns, "", "") == Multiset(((),))
     assert edition(all_aligns, "a", "b") == Multiset(
         (
@@ -151,16 +181,6 @@ if __name__ == "__main__":
     all_aligns_bruteforce("abba", "abab")
     all_aligns_bruteforce("alberta", "camera")
 
-    def cost_of(align: Align) -> int:
-        return sum(
-            0 if kind == "match" and rest[0] == rest[1] else 1 for kind, *rest in align
-        )
-
-    assert cost_of((("match", "a", "a"), ("match", "b", "b"))) == 0
-    assert cost_of((("match", "a", "a"), ("match", "b", "c"))) == 1
-    assert cost_of((("delete", "a"), ("match", "b", "c"))) == 2
-    assert cost_of((("delete", "a"), ("insert", "a"), ("match", "b", "b"))) == 2
-
     assert edition(min_cost, "abba", "abab") == min(
         cost_of(align) for align in edition(all_aligns, "abba", "abab")
     )
@@ -168,9 +188,11 @@ if __name__ == "__main__":
         cost_of(align) for align in edition(all_aligns, "abba", "abab")
     )
 
-    # Compute the number of alignments of minimum cost
-    min_cost_count = join(cost=min_cost, count=count) | lex("cost")
 
+# Compute the number of alignments of minimum cost
+min_cost_count = join(cost=min_cost, count=count) | lex("cost")
+
+if __name__ == "__main__":
     assert edition(min_cost_count, "", "") == Record(cost=0, count=1)
     assert edition(min_cost_count, "ab", "bc") == Record(cost=2, count=2)
     assert edition(min_cost_count, "abba", "abab") == Record(cost=2, count=4)
@@ -192,9 +214,11 @@ if __name__ == "__main__":
     min_cost_count_bruteforce("abba", "abab")
     min_cost_count_bruteforce("alberta", "camera")
 
-    # Compute the set of alignments of minimum cost
-    min_cost_aligns = join(cost=min_cost, solutions=all_aligns) | lex("cost")
 
+# Compute the set of alignments of minimum cost
+min_cost_aligns = join(cost=min_cost, solutions=all_aligns) | lex("cost")
+
+if __name__ == "__main__":
     assert edition(min_cost_aligns, "", "") == Record(
         cost=0,
         solutions=Multiset(((),)),
@@ -298,9 +322,11 @@ if __name__ == "__main__":
     min_cost_aligns_bruteforce("abba", "abab")
     min_cost_aligns_bruteforce("alberta", "camera")
 
-    # Compute the number of alignments of each cost
-    all_costs_count = join(cost=min_cost, count=count) | power() | group("cost")
 
+# Compute the number of alignments of each cost
+all_costs_count = join(cost=min_cost, count=count) | power() | group("cost")
+
+if __name__ == "__main__":
     assert edition(all_costs_count, "", "") == Multiset((Record(cost=0, count=1),))
 
     assert edition(all_costs_count, "ab", "bc") == Multiset(
@@ -353,28 +379,30 @@ if __name__ == "__main__":
     all_costs_count_bruteforce("abba", "abab")
     all_costs_count_bruteforce("alberta", "camera")
 
-    # Compute the Pareto-optimal number of operations of each type
-    min_change = replace(
-        min_cost,
-        match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
-        delete=lambda sym: 0,
-        insert=lambda sym: 0,
-    )
-    min_delete = replace(
-        min_cost,
-        match=lambda sym1, sym2: 0,
-        delete=lambda sym: 1,
-        insert=lambda sym: 0,
-    )
-    min_insert = replace(
-        min_cost,
-        match=lambda sym1, sym2: 0,
-        delete=lambda sym: 0,
-        insert=lambda sym: 1,
-    )
-    operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
-    par_operations = operations | power() | pareto("*")
 
+# Compute the Pareto-optimal number of operations of each type
+min_change = replace(
+    min_cost,
+    match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
+    delete=lambda sym: 0,
+    insert=lambda sym: 0,
+)
+min_delete = replace(
+    min_cost,
+    match=lambda sym1, sym2: 0,
+    delete=lambda sym: 1,
+    insert=lambda sym: 0,
+)
+min_insert = replace(
+    min_cost,
+    match=lambda sym1, sym2: 0,
+    delete=lambda sym: 0,
+    insert=lambda sym: 1,
+)
+operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
+par_operations = operations | power() | pareto("*")
+
+if __name__ == "__main__":
     assert edition(par_operations, "", "") == Multiset(
         (Record(changes=0, deletes=0, inserts=0),)
     )
@@ -441,11 +469,13 @@ if __name__ == "__main__":
     par_operations_bruteforce("abba", "abab")
     par_operations_bruteforce("alberta", "camera")
 
-    # Compute the number of solutions for each Pareto-optimal operation count
-    par_operations_count = (
-        join(operations=operations, count=count) | power() | pareto("operations.*")
-    )
 
+# Compute the number of solutions for each Pareto-optimal operation count
+par_operations_count = (
+    join(operations=operations, count=count) | power() | pareto("operations.*")
+)
+
+if __name__ == "__main__":
     assert edition(par_operations_count, "", "") == Multiset(
         (
             Record(
@@ -515,13 +545,13 @@ if __name__ == "__main__":
     par_operations_count_bruteforce("abba", "abab")
     par_operations_count_bruteforce("alberta", "camera")
 
-    # Compute the set of alignments having Pareto-optimal operation counts
-    par_operations_aligns = (
-        join(operations=operations, solutions=all_aligns)
-        | power()
-        | pareto("operations.*")
-    )
 
+# Compute the set of alignments having Pareto-optimal operation counts
+par_operations_aligns = (
+    join(operations=operations, solutions=all_aligns) | power() | pareto("operations.*")
+)
+
+if __name__ == "__main__":
     assert edition(par_operations_aligns, "", "") == Multiset(
         (
             Record(

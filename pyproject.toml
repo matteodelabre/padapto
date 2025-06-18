@@ -42,7 +42,7 @@ format = "black --diff --check --color ."
 format-fix = "black ."
 lint = "ruff check ."
 lint-fix = "ruff check --fix ."
-typecheck = "mypy --exclude examples ."
+typecheck = "mypy ."
 examples = "for file in examples/*; do echo 'Running' $file; python $file; done"
 check-all = """
 hatch run dev:lint \
