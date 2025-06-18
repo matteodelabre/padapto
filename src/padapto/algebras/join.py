@@ -1,10 +1,16 @@
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from functools import partial
 from typing import Any, TypeVar
 
 from ..collections import Record
-from .signature import Operator, Signature, make_checked_operator, trace
+from .signature import (
+    Operator,
+    Signature,
+    extract_algebra_parent,
+    make_checked_operator,
+    trace,
+)
 
 
 def _joined_operator[T](
@@ -81,3 +87,67 @@ def join[S: Signature[Any]](
         elements[field.name] = make_checked_operator(field.type, record_type, op)
 
     return signature(**elements)
+
+
+def get_subrecord(record: Any, field: str) -> Any:
+    """Access a field inside a record using dotted notation."""
+    for entry in field.split("."):
+        record = getattr(record, entry)
+
+    return record
+
+
+def get_subalgebras(
+    algebra: Signature[Any],
+    *keys: str | tuple[str, ...],
+    _prefix: tuple[str, ...] = (),
+) -> Iterator[tuple[str, Signature[Any]]]:
+    """
+    Recursively resolve fields of a joined algebra using dotted notation.
+
+    :param algebra: joined algebra
+    :param keys: list of keys to resolve, specifying fields with dotted notation and
+        optionally using stars ('*') to refer to all fields of a given depth
+    :returns: iterator of pairs containing each resolved field’s complete name in dotted
+        notation and the corresponding subalgebra
+    """
+    for key in keys:
+        result = algebra
+
+        if isinstance(key, str):
+            key = tuple(key.split("."))
+
+        for i, entry in enumerate(key):
+            if (
+                subalgebras := extract_algebra_parent(result, "join", kwargs=True)
+            ) is None:
+                location = ".".join(_prefix + key[:i])
+
+                if location:
+                    raise TypeError(f"algebra of '{location}' is not joined")
+                else:
+                    raise TypeError("provided algebra is not joined")
+
+            if entry == "*":
+                for name, subalgebra in subalgebras.items():
+                    yield from get_subalgebras(
+                        subalgebra, key[i + 1 :], _prefix=_prefix + key[:i] + (name,)
+                    )
+
+                break
+            else:
+                if entry not in subalgebras:
+                    location = ".".join(_prefix + key[:i])
+
+                    if location:
+                        raise AttributeError(
+                            f"'{entry}' is not a field of '{location}'"
+                        )
+                    else:
+                        raise AttributeError(
+                            f"'{entry}' is not a field of the provided algebra"
+                        )
+
+                result = subalgebras[entry]
+        else:
+            yield ".".join(_prefix + key), result

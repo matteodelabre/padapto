@@ -5,8 +5,6 @@ from types import GenericAlias
 from typing import Any, Concatenate, Self, TypeVar, get_args, get_origin
 from weakref import WeakKeyDictionary
 
-from immutables import Map
-
 
 @dataclass(frozen=True, slots=True)
 class Signature[T]:
@@ -203,7 +201,7 @@ def trace(transparent: bool = False):
                 if args[0] in _parent_registry:
                     _parent_registry[result] = _parent_registry[args[0]]
             else:
-                _parent_registry[result] = (traced_func.__name__, args, Map(kwargs))
+                _parent_registry[result] = (traced_func.__name__, args, kwargs)
 
             return result
 

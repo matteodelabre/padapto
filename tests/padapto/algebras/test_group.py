@@ -144,6 +144,108 @@ def test_group_twice():
 
 
 @dataclass(frozen=True, slots=True)
+class NestedCostCount:
+    left: CostCount
+    right: int
+
+
+def test_group_nested():
+    tropical = SemiRing[int | float](
+        null=lambda: inf,
+        choose=min,
+        unit=lambda: 0,
+        combine=operator.add,
+    )
+    integers = SemiRing[int](
+        null=lambda: 0,
+        choose=operator.add,
+        unit=lambda: 1,
+        combine=operator.mul,
+    )
+
+    algebra = cast(
+        SemiRing[NestedCostCount],
+        join(
+            NestedCostCount,
+            left=join(CostCount, cost=tropical, count=integers),
+            right=integers,
+        )
+        | power()
+        | group("left.cost"),
+    )
+
+    assert algebra.null() == Multiset()
+    assert algebra.unit() == Multiset(
+        (NestedCostCount(left=CostCount(cost=0, count=1), right=1),)
+    )
+
+    assert algebra.choose(
+        Multiset(
+            (
+                NestedCostCount(left=CostCount(cost=2, count=3), right=7),
+                NestedCostCount(left=CostCount(cost=3, count=5), right=11),
+            )
+        ),
+        Multiset(
+            (
+                NestedCostCount(left=CostCount(cost=3, count=7), right=11),
+                NestedCostCount(left=CostCount(cost=5, count=11), right=13),
+            )
+        ),
+    ) == Multiset(
+        (
+            NestedCostCount(left=CostCount(cost=2, count=3), right=7),
+            NestedCostCount(left=CostCount(cost=3, count=5 + 7), right=11 + 11),
+            NestedCostCount(left=CostCount(cost=5, count=11), right=13),
+        )
+    )
+
+    assert algebra.combine(
+        Multiset(
+            (
+                NestedCostCount(left=CostCount(cost=2, count=3), right=7),
+                NestedCostCount(left=CostCount(cost=3, count=5), right=11),
+            )
+        ),
+        Multiset(
+            (
+                NestedCostCount(left=CostCount(cost=3, count=7), right=11),
+                NestedCostCount(left=CostCount(cost=4, count=11), right=13),
+            )
+        ),
+    ) == Multiset(
+        (
+            NestedCostCount(left=CostCount(cost=5, count=3 * 7), right=7 * 11),
+            NestedCostCount(
+                left=CostCount(cost=6, count=3 * 11 + 5 * 7),
+                right=7 * 13 + 11 * 11,
+            ),
+            NestedCostCount(left=CostCount(cost=7, count=5 * 11), right=11 * 13),
+        )
+    )
+
+    check_semiring(
+        algebra,
+        (
+            Multiset((NestedCostCount(left=CostCount(cost=3, count=1), right=2),)),
+            Multiset(
+                (
+                    NestedCostCount(left=CostCount(cost=2, count=3), right=5),
+                    NestedCostCount(left=CostCount(cost=3, count=5), right=7),
+                )
+            ),
+            Multiset(
+                (
+                    NestedCostCount(left=CostCount(cost=1, count=2), right=7),
+                    NestedCostCount(left=CostCount(cost=2, count=4), right=2),
+                )
+            ),
+        ),
+        conservative=False,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class CostSolutions:
     cost: int | float
     solutions: Multiset[tuple[str, ...]]
@@ -290,11 +392,13 @@ def test_group_invalid():
 
     with pytest.raises(
         TypeError,
-        match="group: provided algebra is not a joined algebra",
+        match="provided algebra is not joined",
     ):
         pow_tropical | group("a", "b", "c")
 
     joined = join(a=tropical, b=tropical) | power()
 
-    with pytest.raises(TypeError, match="group: 'c' is not a subalgebra field"):
+    with pytest.raises(
+        AttributeError, match="'c' is not a field of the provided algebra"
+    ):
         joined | group("a", "b", "c")

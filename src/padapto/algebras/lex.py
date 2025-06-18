@@ -2,10 +2,10 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any
 
+from .join import get_subalgebras, get_subrecord
 from .signature import (
     Comparator,
     Signature,
-    extract_algebra_parent,
     make_natural_order,
     pipable,
     trace,
@@ -18,8 +18,8 @@ def _make_lex_choice[T](
     compare: Comparator[Any],
 ) -> Callable[[T, T], T]:
     def choose(left: T, right: T) -> T:
-        left_value = getattr(left, field)
-        right_value = getattr(right, field)
+        left_value = get_subrecord(left, field)
+        right_value = get_subrecord(right, field)
 
         left_le_right = compare(left_value, right_value)
         right_le_left = compare(right_value, left_value)
@@ -40,18 +40,19 @@ def _make_lex_choice[T](
 
 @pipable
 @trace(transparent=True)
-def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]]) -> S:
+def lex[S: Signature[Any]](algebra: S, *keys: str) -> S:
     """
     Select between values based on a lexicographical order in a joined algebra.
 
-    When choosing between two values, given a set of fields from a joined algebra and a
-    total monotonous order for each of them, keep the least one in lexicographical order
-    (i.e., first choose the least value according to the first field, then compare the
-    second field in case of equality, and so on). If two values are equal on all fields,
-    they get combined using the original choice function of the other subalgebras.
+    When choosing between two values, given a set of fields from a joined algebra, use
+    the natural order of each field to keep the least value in lexicographical order
+    (i.e., first choose the least value according to the first field’s order, then
+    compare the second field in case of equality, and so on). If two values are equal on
+    all fields, combine them using the original choice function.
 
-    The resulting algebra is valid if all the given comparator functions are total and
-    monotonous orders.
+    The resulting algebra is valid if all the natural orders of all given fields are
+    total and monotonous, which is the case if the choice functions of the respective
+    subalgebras are conservative.
 
     Repeated call of this function on multiple fields is equivalent to a single call on
     all the fields, i.e., `lex(alg, "f1", "f2", "f3")` is equivalent to
@@ -62,30 +63,14 @@ def lex[S: Signature[Any]](algebra: S, *fields: str | tuple[str, Comparator[Any]
     programming using pair algebras" by Steffen and Giegerich (2005).
 
     :param algebra: joined algebra to transform
-    :param fields: fields with respect to which to order - each argument is either a
-        tuple containing a field name and a comparator giving the total order to use for
-        that field, or simply a plain field name (in which case the natural order of the
-        subalgebra is used, which is always total and monotonous if the choice function
-        of that subalgebra is conservative)
+    :param keys: fields with respect to which to order; use dotted notation to
+        access nested fields; use a star ('*') to access all fields at a given depth
     :returns: new transformed algebra
     """
-    if (subalgebras := extract_algebra_parent(algebra, "join", kwargs=True)) is None:
-        raise TypeError("lex: provided algebra is not a joined algebra")
-
     choose = algebra.choose
 
-    for field in reversed(fields):
-        compare = None
-
-        if not isinstance(field, str):
-            field, compare = field
-
-        if field not in subalgebras:
-            raise TypeError(f"lex: '{field}' is not a subalgebra field")
-
-        if compare is None:
-            compare = make_natural_order(subalgebras[field])
-
+    for field, subalgebra in list(get_subalgebras(algebra, *keys))[::-1]:
+        compare = make_natural_order(subalgebra)
         choose = _make_lex_choice(choose, field, compare)
 
     return dataclasses.replace(algebra, choose=choose)

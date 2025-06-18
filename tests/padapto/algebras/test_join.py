@@ -5,9 +5,8 @@ from math import inf, prod
 from typing import cast
 
 import pytest
-from immutables import Map
 
-from padapto.algebras.join import join
+from padapto.algebras.join import get_subalgebras, get_subrecord, join
 from padapto.algebras.signature import Signature, get_algebra_parent
 from padapto.collections import Record
 
@@ -332,10 +331,106 @@ def test_join_metadata():
     assert get_algebra_parent(joined) == (
         "join",
         (TypedRecord,),
-        Map(
-            {
-                "first": tropical,
-                "second": integers,
-            }
-        ),
+        {
+            "first": tropical,
+            "second": integers,
+        },
     )
+
+
+def test_get_subrecord():
+    record = Record(left=Record(a=1, b=2), right="test")
+
+    assert get_subrecord(record, "left") == record.left
+    assert get_subrecord(record, "right") == record.right
+    assert get_subrecord(record, "left.a") == record.left.a
+    assert get_subrecord(record, "left.b") == record.left.b
+
+    with pytest.raises(AttributeError, match="record has no field 'c'"):
+        get_subrecord(record, "left.c")
+
+
+def test_get_subalgebras():
+    tropical = SemiRing[int | float](
+        null=lambda: inf,
+        choose=min,
+        unit=lambda: 0,
+        combine=operator.add,
+    )
+    integers = SemiRing[int](
+        null=lambda: 0,
+        choose=operator.add,
+        unit=lambda: 1,
+        combine=operator.mul,
+    )
+
+    join0 = cast(SemiRing[Record], join(alpha=tropical, beta=integers))
+    join1 = cast(SemiRing[Record], join(a=tropical, b=integers, c=join0))
+    join2 = cast(SemiRing[Record], join(beta=tropical, gamma=integers))
+    join3 = cast(SemiRing[Record], join(c=join2, d=integers))
+    join4 = cast(SemiRing[Record], join(left=join1, right=join3))
+
+    assert list(get_subalgebras(join4, "left")) == [("left", join1)]
+    assert list(get_subalgebras(join4, "right")) == [("right", join3)]
+    assert list(get_subalgebras(join4, "left", "right")) == [
+        ("left", join1),
+        ("right", join3),
+    ]
+    assert list(get_subalgebras(join4)) == []
+    assert list(get_subalgebras(join4, "left.a")) == [("left.a", tropical)]
+    assert list(get_subalgebras(join4, "left.b")) == [("left.b", integers)]
+    assert list(get_subalgebras(join4, "left.c")) == [("left.c", join0)]
+    assert list(get_subalgebras(join4, "left.c.alpha")) == [("left.c.alpha", tropical)]
+    assert list(get_subalgebras(join4, "left.c.beta")) == [("left.c.beta", integers)]
+    assert list(get_subalgebras(join4, "right.c")) == [("right.c", join2)]
+    assert list(get_subalgebras(join4, "right.d")) == [("right.d", integers)]
+
+    assert list(get_subalgebras(join4, "*")) == [("left", join1), ("right", join3)]
+    assert list(get_subalgebras(join4, "left.*")) == [
+        ("left.a", tropical),
+        ("left.b", integers),
+        ("left.c", join0),
+    ]
+    assert list(get_subalgebras(join4, "right.*")) == [
+        ("right.c", join2),
+        ("right.d", integers),
+    ]
+    assert list(get_subalgebras(join4, "left.*", "right.*")) == [
+        ("left.a", tropical),
+        ("left.b", integers),
+        ("left.c", join0),
+        ("right.c", join2),
+        ("right.d", integers),
+    ]
+    assert list(get_subalgebras(join4, "*.c")) == [
+        ("left.c", join0),
+        ("right.c", join2),
+    ]
+    assert list(get_subalgebras(join4, "*.c.beta")) == [
+        ("left.c.beta", integers),
+        ("right.c.beta", tropical),
+    ]
+    assert list(get_subalgebras(join4, "*.*")) == [
+        ("left.a", tropical),
+        ("left.b", integers),
+        ("left.c", join0),
+        ("right.c", join2),
+        ("right.d", integers),
+    ]
+
+    with pytest.raises(TypeError, match="algebra of 'left.a' is not joined"):
+        list(get_subalgebras(join4, "left.a.test"))
+
+    with pytest.raises(TypeError, match="provided algebra is not joined"):
+        list(get_subalgebras(integers, "left"))
+
+    with pytest.raises(
+        AttributeError, match="'unknown' is not a field of the provided algebra"
+    ):
+        list(get_subalgebras(join4, "unknown"))
+
+    with pytest.raises(AttributeError, match="'unknown' is not a field of 'left.c'"):
+        list(get_subalgebras(join4, "left.c.unknown"))
+
+    with pytest.raises(AttributeError, match="'alpha' is not a field of 'right.c'"):
+        list(get_subalgebras(join4, "*.c.alpha"))

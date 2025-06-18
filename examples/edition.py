@@ -412,12 +412,9 @@ if __name__ == "__main__":
         )
 
     def operations_lt(lhs: Record, rhs: Record) -> bool:
-        return (
-            lhs != rhs
-            and all(
-                getattr(lhs, key) <= getattr(rhs, key)
-                for key in ("changes", "deletes", "inserts")
-            )
+        return lhs != rhs and all(
+            getattr(lhs, key) <= getattr(rhs, key)
+            for key in ("changes", "deletes", "inserts")
         )
 
     assert operations_of((("match", "a", "a"), ("match", "b", "b"))) == Record(
@@ -434,14 +431,270 @@ if __name__ == "__main__":
     ) == Record(changes=0, deletes=1, inserts=1)
 
     def par_operations_bruteforce(word1: str, word2: str) -> None:
-        vecs = [operations_of(align) for align in edition(all_aligns, word1, word2)]
+        vecs = set(operations_of(align) for align in edition(all_aligns, word1, word2))
         assert edition(par_operations, word1, word2) == Multiset(
-            vec
-            for vec in set(vecs)
-            if not any(operations_lt(other, vec) for other in vecs)
+            vec for vec in vecs if not any(operations_lt(other, vec) for other in vecs)
         )
 
     par_operations_bruteforce("", "")
     par_operations_bruteforce("ab", "bc")
     par_operations_bruteforce("abba", "abab")
     par_operations_bruteforce("alberta", "camera")
+
+    # Compute the number of solutions for each Pareto-optimal operation count
+    par_operations_count = (
+        join(operations=operations, count=count) | power() | pareto("operations.*")
+    )
+
+    assert edition(par_operations_count, "", "") == Multiset(
+        (
+            Record(
+                operations=Record(changes=0, deletes=0, inserts=0),
+                count=1,
+            ),
+        )
+    )
+
+    assert edition(par_operations_count, "ab", "bc") == Multiset(
+        (
+            Record(
+                operations=Record(changes=2, deletes=0, inserts=0),
+                count=1,
+            ),
+            Record(
+                operations=Record(changes=0, deletes=1, inserts=1),
+                count=1,
+            ),
+        )
+    )
+
+    assert edition(par_operations_count, "abba", "abab") == Multiset(
+        (
+            Record(
+                operations=Record(changes=2, deletes=0, inserts=0),
+                count=1,
+            ),
+            Record(
+                operations=Record(changes=0, deletes=1, inserts=1),
+                count=3,
+            ),
+        )
+    )
+
+    assert edition(par_operations_count, "alberta", "camera") == Multiset(
+        (
+            Record(
+                operations=Record(changes=3, deletes=1, inserts=0),
+                count=1,
+            ),
+            Record(
+                operations=Record(changes=1, deletes=2, inserts=1),
+                count=2,
+            ),
+            Record(
+                operations=Record(changes=0, deletes=3, inserts=2),
+                count=3,
+            ),
+        )
+    )
+
+    def par_operations_count_bruteforce(word1: str, word2: str) -> None:
+        res_aligns = edition(all_aligns, word1, word2)
+        vecs = set(operations_of(align) for align in res_aligns)
+        assert edition(par_operations_count, word1, word2) == Multiset(
+            Record(
+                operations=vec,
+                count=sum(1 for align in res_aligns if operations_of(align) == vec),
+            )
+            for vec in vecs
+            if not any(operations_lt(other, vec) for other in vecs)
+        )
+
+    par_operations_count_bruteforce("", "")
+    par_operations_count_bruteforce("ab", "bc")
+    par_operations_count_bruteforce("abba", "abab")
+    par_operations_count_bruteforce("alberta", "camera")
+
+    # Compute the set of alignments having Pareto-optimal operation counts
+    par_operations_aligns = (
+        join(operations=operations, solutions=all_aligns)
+        | power()
+        | pareto("operations.*")
+    )
+
+    assert edition(par_operations_aligns, "", "") == Multiset(
+        (
+            Record(
+                operations=Record(changes=0, deletes=0, inserts=0),
+                solutions=Multiset(((),)),
+            ),
+        )
+    )
+
+    assert edition(par_operations_aligns, "ab", "bc") == Multiset(
+        (
+            Record(
+                operations=Record(changes=2, deletes=0, inserts=0),
+                solutions=Multiset(((("match", "a", "b"), ("match", "b", "c")),)),
+            ),
+            Record(
+                operations=Record(changes=0, deletes=1, inserts=1),
+                solutions=Multiset(
+                    ((("delete", "a"), ("match", "b", "b"), ("insert", "c")),)
+                ),
+            ),
+        )
+    )
+
+    assert edition(par_operations_aligns, "abba", "abab") == Multiset(
+        (
+            Record(
+                operations=Record(changes=2, deletes=0, inserts=0),
+                solutions=Multiset(
+                    (
+                        (
+                            ("match", "a", "a"),
+                            ("match", "b", "b"),
+                            ("match", "b", "a"),
+                            ("match", "a", "b"),
+                        ),
+                    )
+                ),
+            ),
+            Record(
+                operations=Record(changes=0, deletes=1, inserts=1),
+                solutions=Multiset(
+                    (
+                        (
+                            ("match", "a", "a"),
+                            ("match", "b", "b"),
+                            ("insert", "a"),
+                            ("match", "b", "b"),
+                            ("delete", "a"),
+                        ),
+                        (
+                            ("match", "a", "a"),
+                            ("delete", "b"),
+                            ("match", "b", "b"),
+                            ("match", "a", "a"),
+                            ("insert", "b"),
+                        ),
+                        (
+                            ("match", "a", "a"),
+                            ("match", "b", "b"),
+                            ("delete", "b"),
+                            ("match", "a", "a"),
+                            ("insert", "b"),
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+
+    assert edition(par_operations_aligns, "alberta", "camera") == Multiset(
+        (
+            Record(
+                operations=Record(changes=3, deletes=1, inserts=0),
+                solutions=Multiset(
+                    (
+                        (
+                            ("match", "a", "c"),
+                            ("match", "l", "a"),
+                            ("match", "b", "m"),
+                            ("match", "e", "e"),
+                            ("match", "r", "r"),
+                            ("delete", "t"),
+                            ("match", "a", "a"),
+                        ),
+                    )
+                ),
+            ),
+            Record(
+                operations=Record(changes=1, deletes=2, inserts=1),
+                solutions=Multiset(
+                    (
+                        (
+                            ("insert", "c"),
+                            ("match", "a", "a"),
+                            ("delete", "l"),
+                            ("match", "b", "m"),
+                            ("match", "e", "e"),
+                            ("match", "r", "r"),
+                            ("delete", "t"),
+                            ("match", "a", "a"),
+                        ),
+                        (
+                            ("insert", "c"),
+                            ("match", "a", "a"),
+                            ("match", "l", "m"),
+                            ("delete", "b"),
+                            ("match", "e", "e"),
+                            ("match", "r", "r"),
+                            ("delete", "t"),
+                            ("match", "a", "a"),
+                        ),
+                    )
+                ),
+            ),
+            Record(
+                operations=Record(changes=0, deletes=3, inserts=2),
+                solutions=Multiset(
+                    (
+                        (
+                            ("insert", "c"),
+                            ("match", "a", "a"),
+                            ("insert", "m"),
+                            ("delete", "l"),
+                            ("delete", "b"),
+                            ("match", "e", "e"),
+                            ("match", "r", "r"),
+                            ("delete", "t"),
+                            ("match", "a", "a"),
+                        ),
+                        (
+                            ("insert", "c"),
+                            ("match", "a", "a"),
+                            ("delete", "l"),
+                            ("insert", "m"),
+                            ("delete", "b"),
+                            ("match", "e", "e"),
+                            ("match", "r", "r"),
+                            ("delete", "t"),
+                            ("match", "a", "a"),
+                        ),
+                        (
+                            ("insert", "c"),
+                            ("match", "a", "a"),
+                            ("delete", "l"),
+                            ("delete", "b"),
+                            ("insert", "m"),
+                            ("match", "e", "e"),
+                            ("match", "r", "r"),
+                            ("delete", "t"),
+                            ("match", "a", "a"),
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+
+    def par_operations_aligns_bruteforce(word1: str, word2: str) -> None:
+        res_aligns = edition(all_aligns, word1, word2)
+        vecs = set(operations_of(align) for align in res_aligns)
+        assert edition(par_operations_aligns, word1, word2) == Multiset(
+            Record(
+                operations=vec,
+                solutions=Multiset(
+                    align for align in res_aligns if operations_of(align) == vec
+                ),
+            )
+            for vec in vecs
+            if not any(operations_lt(other, vec) for other in vecs)
+        )
+
+    par_operations_aligns_bruteforce("", "")
+    par_operations_aligns_bruteforce("ab", "bc")
+    par_operations_aligns_bruteforce("abba", "abab")
+    par_operations_aligns_bruteforce("alberta", "camera")

@@ -3,8 +3,6 @@ from dataclasses import dataclass
 from math import inf
 from typing import cast
 
-from immutables import Map
-
 from padapto.algebras.join import join
 from padapto.algebras.lex import lex
 from padapto.algebras.power import power
@@ -334,4 +332,4 @@ def test_power_metadata():
     )
 
     generator = cast(SemiRing[Multiset[tuple[str, ...]]], free | power())
-    assert get_algebra_parent(generator) == ("power", (free,), Map())
+    assert get_algebra_parent(generator) == ("power", (free,), {})

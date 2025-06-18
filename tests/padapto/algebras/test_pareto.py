@@ -17,7 +17,7 @@ class TwoFields:
     second: int | float
 
 
-def test_pareto_two():
+def test_pareto_all():
     tropical = SemiRing[int | float](
         null=lambda: inf,
         choose=min,
@@ -25,11 +25,7 @@ def test_pareto_two():
         combine=operator.add,
     )
 
-    algebra = (
-        join(TwoFields, first=tropical, second=tropical)
-        | power()
-        | pareto("first", "second")
-    )
+    algebra = join(TwoFields, first=tropical, second=tropical) | power() | pareto("*")
 
     assert algebra.choose(
         Multiset((TwoFields(first=1, second=2),)),
