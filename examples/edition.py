@@ -62,15 +62,20 @@ if __name__ == "__main__":
         insert=lambda sym: 1,
     )
 
+    assert edition(min_cost, "", "") == 0
     assert edition(min_cost, "ab", "bc") == 2
-    assert edition(min_cost, "elephant", "relevant") == 3
+    assert edition(min_cost, "abba", "abab") == 2
+    assert edition(min_cost, "alberta", "camera") == 4
 
     # Compute the cost of all alignments, in increasing order
     all_min_costs = min_cost | power(order=True)
 
+    assert edition(all_min_costs, "", "") == Multiset((0,))
     assert edition(all_min_costs, "ab", "bc") == Multiset(
         (2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4)
     )
+    # assert edition(all_min_costs, "abba", "abab") == <... 321 results ...>
+    # assert edition(all_min_costs, "alberta", "camera") == <... 19825 results ...>
 
     # Compute the cost of the 5 best alignments
     five_best_costs = min_cost | power(order=True) | limit(5)
@@ -90,13 +95,9 @@ if __name__ == "__main__":
     )
 
     assert edition(count, "", "") == 1
-    assert edition(count, "a", "") == 1
-    assert edition(count, "", "b") == 1
-    assert edition(count, "a", "b") == 3
-    assert edition(count, "ab", "b") == 5
     assert edition(count, "ab", "bc") == 13
     assert edition(count, "abba", "abab") == 321
-    assert edition(count, "abcdef", "abcdef") == 8989
+    assert edition(count, "alberta", "camera") == 19825
 
     # Generate one of the possible alignments
     type Align = tuple[tuple[str | None, str | None], ...]
@@ -111,8 +112,22 @@ if __name__ == "__main__":
     )
 
     assert edition(one_align, "", "") == ()
-    assert edition(one_align, "ab", "b") == (("delete", "a"), ("match", "b", "b"))
     assert edition(one_align, "ab", "bc") == (("match", "a", "b"), ("match", "b", "c"))
+    assert edition(one_align, "abba", "abab") == (
+        ("match", "a", "a"),
+        ("match", "b", "b"),
+        ("match", "b", "a"),
+        ("match", "a", "b"),
+    )
+    assert edition(one_align, "alberta", "camera") == (
+        ("delete", "a"),
+        ("match", "l", "c"),
+        ("match", "b", "a"),
+        ("match", "e", "m"),
+        ("match", "r", "e"),
+        ("match", "t", "r"),
+        ("match", "a", "a"),
+    )
 
     # Generate all possible alignments
     all_aligns = one_align | power()
@@ -125,8 +140,16 @@ if __name__ == "__main__":
             (("insert", "b"), ("delete", "a")),
         )
     )
-    assert len(edition(all_aligns, "abcdef", "abcdef")) == 8989
-    assert len(set(edition(all_aligns, "abcdef", "abcdef"))) == 8989
+    # edition(all_aligns, "abba", "abab") == Multiset(<... 321 results ...>)
+    # edition(all_aligns, "alberta", "camera") == Multiset(<... 19825 results ...>)
+
+    def all_aligns_bruteforce(word1: str, word2: str) -> None:
+        assert len(edition(all_aligns, word1, word2)) == edition(count, word1, word2)
+
+    all_aligns_bruteforce("", "")
+    all_aligns_bruteforce("ab", "bc")
+    all_aligns_bruteforce("abba", "abab")
+    all_aligns_bruteforce("alberta", "camera")
 
     def cost_of(align: Align) -> int:
         return sum(
@@ -148,12 +171,34 @@ if __name__ == "__main__":
     # Compute the number of alignments of minimum cost
     min_cost_count = join(cost=min_cost, count=count) | lex("cost")
 
+    assert edition(min_cost_count, "", "") == Record(cost=0, count=1)
     assert edition(min_cost_count, "ab", "bc") == Record(cost=2, count=2)
-    assert edition(min_cost_count, "elephant", "relevant") == Record(cost=3, count=2)
     assert edition(min_cost_count, "abba", "abab") == Record(cost=2, count=4)
+    assert edition(min_cost_count, "alberta", "camera") == Record(cost=4, count=3)
+
+    def min_cost_count_bruteforce(word1: str, word2: str) -> None:
+        res_min_cost = edition(min_cost, word1, word2)
+        assert edition(min_cost_count, word1, word2) == Record(
+            cost=res_min_cost,
+            count=sum(
+                1
+                for align in edition(all_aligns, word1, word2)
+                if cost_of(align) == res_min_cost
+            ),
+        )
+
+    min_cost_count_bruteforce("", "")
+    min_cost_count_bruteforce("ab", "bc")
+    min_cost_count_bruteforce("abba", "abab")
+    min_cost_count_bruteforce("alberta", "camera")
 
     # Compute the set of alignments of minimum cost
     min_cost_aligns = join(cost=min_cost, solutions=all_aligns) | lex("cost")
+
+    assert edition(min_cost_aligns, "", "") == Record(
+        cost=0,
+        solutions=Multiset(((),)),
+    )
 
     assert edition(min_cost_aligns, "ab", "bc") == Record(
         cost=2,
@@ -164,35 +209,7 @@ if __name__ == "__main__":
             )
         ),
     )
-    assert edition(min_cost_aligns, "elephant", "relevant") == Record(
-        cost=3,
-        solutions=Multiset(
-            (
-                (
-                    ("insert", "r"),
-                    ("match", "e", "e"),
-                    ("match", "l", "l"),
-                    ("match", "e", "e"),
-                    ("match", "p", "v"),
-                    ("delete", "h"),
-                    ("match", "a", "a"),
-                    ("match", "n", "n"),
-                    ("match", "t", "t"),
-                ),
-                (
-                    ("insert", "r"),
-                    ("match", "e", "e"),
-                    ("match", "l", "l"),
-                    ("match", "e", "e"),
-                    ("delete", "p"),
-                    ("match", "h", "v"),
-                    ("match", "a", "a"),
-                    ("match", "n", "n"),
-                    ("match", "t", "t"),
-                ),
-            )
-        ),
-    )
+
     assert edition(min_cost_aligns, "abba", "abab") == Record(
         cost=2,
         solutions=Multiset(
@@ -228,8 +245,63 @@ if __name__ == "__main__":
         ),
     )
 
+    assert edition(min_cost_aligns, "alberta", "camera") == Record(
+        cost=4,
+        solutions=Multiset(
+            (
+                (
+                    ("match", "a", "c"),
+                    ("match", "l", "a"),
+                    ("match", "b", "m"),
+                    ("match", "e", "e"),
+                    ("match", "r", "r"),
+                    ("delete", "t"),
+                    ("match", "a", "a"),
+                ),
+                (
+                    ("insert", "c"),
+                    ("match", "a", "a"),
+                    ("delete", "l"),
+                    ("match", "b", "m"),
+                    ("match", "e", "e"),
+                    ("match", "r", "r"),
+                    ("delete", "t"),
+                    ("match", "a", "a"),
+                ),
+                (
+                    ("insert", "c"),
+                    ("match", "a", "a"),
+                    ("match", "l", "m"),
+                    ("delete", "b"),
+                    ("match", "e", "e"),
+                    ("match", "r", "r"),
+                    ("delete", "t"),
+                    ("match", "a", "a"),
+                ),
+            )
+        ),
+    )
+
+    def min_cost_aligns_bruteforce(word1: str, word2: str) -> None:
+        res_min_cost = edition(min_cost, word1, word2)
+        assert edition(min_cost_aligns, word1, word2) == Record(
+            cost=res_min_cost,
+            solutions=Multiset(
+                align
+                for align in edition(all_aligns, word1, word2)
+                if cost_of(align) == res_min_cost
+            ),
+        )
+
+    min_cost_aligns_bruteforce("", "")
+    min_cost_aligns_bruteforce("ab", "bc")
+    min_cost_aligns_bruteforce("abba", "abab")
+    min_cost_aligns_bruteforce("alberta", "camera")
+
     # Compute the number of alignments of each cost
     all_costs_count = join(cost=min_cost, count=count) | power() | group("cost")
+
+    assert edition(all_costs_count, "", "") == Multiset((Record(cost=0, count=1),))
 
     assert edition(all_costs_count, "ab", "bc") == Multiset(
         (
@@ -238,53 +310,50 @@ if __name__ == "__main__":
             Record(cost=4, count=6),
         )
     )
+
     assert edition(all_costs_count, "abba", "abab") == Multiset(
         (
-            Record(cost=key, count=value)
-            for key, value in Counter(
-                cost_of(align) for align in edition(all_aligns, "abba", "abab")
-            ).items()
+            Record(cost=2, count=4),
+            Record(cost=3, count=7),
+            Record(cost=4, count=32),
+            Record(cost=5, count=43),
+            Record(cost=6, count=95),
+            Record(cost=7, count=70),
+            Record(cost=8, count=70),
         )
     )
 
-    # Compute the Pareto-optimal number of operations of each type
-    def operations_of(align: Align) -> Record:
-        return Record(
-            changes=sum(
-                1 if kind == "match" and rest[0] != rest[1] else 0
-                for kind, *rest in align
-            ),
-            deletes=sum(1 if kind == "delete" else 0 for kind, *_ in align),
-            inserts=sum(1 if kind == "insert" else 0 for kind, *_ in align),
+    assert edition(all_costs_count, "alberta", "camera") == Multiset(
+        (
+            Record(cost=4, count=3),
+            Record(cost=5, count=20),
+            Record(cost=6, count=97),
+            Record(cost=7, count=356),
+            Record(cost=8, count=1059),
+            Record(cost=9, count=2407),
+            Record(cost=10, count=4257),
+            Record(cost=11, count=5456),
+            Record(cost=12, count=4454),
+            Record(cost=13, count=1716),
         )
+    )
 
-    def pareto_filter(vecs: Multiset[Record]) -> Multiset[Record]:
-        return Multiset(
-            vec
-            for vec in set(vecs)
-            if not any(
-                vec != other
-                and all(
-                    getattr(other, key) <= getattr(vec, key)
-                    for key in ("changes", "deletes", "inserts")
-                )
-                for other in vecs
+    def all_costs_count_bruteforce(word1: str, word2: str) -> None:
+        assert edition(all_costs_count, word1, word2) == Multiset(
+            (
+                Record(cost=key, count=value)
+                for key, value in Counter(
+                    cost_of(align) for align in edition(all_aligns, word1, word2)
+                ).items()
             )
         )
 
-    assert operations_of((("match", "a", "a"), ("match", "b", "b"))) == Record(
-        changes=0, deletes=0, inserts=0
-    )
-    assert operations_of((("match", "a", "a"), ("match", "b", "c"))) == Record(
-        changes=1, deletes=0, inserts=0
-    )
-    assert operations_of((("delete", "a"), ("match", "b", "c"))) == Record(
-        changes=1, deletes=1, inserts=0
-    )
-    assert operations_of(
-        (("delete", "a"), ("insert", "a"), ("match", "b", "b"))
-    ) == Record(changes=0, deletes=1, inserts=1)
+    all_costs_count_bruteforce("", "")
+    all_costs_count_bruteforce("ab", "bc")
+    all_costs_count_bruteforce("abba", "abab")
+    all_costs_count_bruteforce("alberta", "camera")
 
+    # Compute the Pareto-optimal number of operations of each type
     min_change = replace(
         min_cost,
         match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
@@ -303,24 +372,76 @@ if __name__ == "__main__":
         delete=lambda sym: 0,
         insert=lambda sym: 1,
     )
-    par_operations = (
-        join(changes=min_change, deletes=min_delete, inserts=min_insert)
-        | power()
-        | pareto("changes", "deletes", "inserts")
-    )
+    operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
+    par_operations = operations | power() | pareto("*")
 
     assert edition(par_operations, "", "") == Multiset(
         (Record(changes=0, deletes=0, inserts=0),)
     )
-    assert edition(par_operations, "a", "b") == Multiset(
+
+    assert edition(par_operations, "ab", "bc") == Multiset(
         (
-            Record(changes=1, deletes=0, inserts=0),
+            Record(changes=2, deletes=0, inserts=0),
             Record(changes=0, deletes=1, inserts=1),
         )
     )
-    assert edition(par_operations, "elephant", "relevant") == pareto_filter(
-        Multiset(
-            operations_of(align)
-            for align in edition(all_aligns, "elephant", "relevant")
+
+    assert edition(par_operations, "abba", "abab") == Multiset(
+        (
+            Record(changes=2, deletes=0, inserts=0),
+            Record(changes=0, deletes=1, inserts=1),
         )
     )
+
+    assert edition(par_operations, "alberta", "camera") == Multiset(
+        (
+            Record(changes=3, deletes=1, inserts=0),
+            Record(changes=1, deletes=2, inserts=1),
+            Record(changes=0, deletes=3, inserts=2),
+        )
+    )
+
+    def operations_of(align: Align) -> Record:
+        return Record(
+            changes=sum(
+                1 if kind == "match" and rest[0] != rest[1] else 0
+                for kind, *rest in align
+            ),
+            deletes=sum(1 if kind == "delete" else 0 for kind, *_ in align),
+            inserts=sum(1 if kind == "insert" else 0 for kind, *_ in align),
+        )
+
+    def operations_lt(lhs: Record, rhs: Record) -> bool:
+        return (
+            lhs != rhs
+            and all(
+                getattr(lhs, key) <= getattr(rhs, key)
+                for key in ("changes", "deletes", "inserts")
+            )
+        )
+
+    assert operations_of((("match", "a", "a"), ("match", "b", "b"))) == Record(
+        changes=0, deletes=0, inserts=0
+    )
+    assert operations_of((("match", "a", "a"), ("match", "b", "c"))) == Record(
+        changes=1, deletes=0, inserts=0
+    )
+    assert operations_of((("delete", "a"), ("match", "b", "c"))) == Record(
+        changes=1, deletes=1, inserts=0
+    )
+    assert operations_of(
+        (("delete", "a"), ("insert", "a"), ("match", "b", "b"))
+    ) == Record(changes=0, deletes=1, inserts=1)
+
+    def par_operations_bruteforce(word1: str, word2: str) -> None:
+        vecs = [operations_of(align) for align in edition(all_aligns, word1, word2)]
+        assert edition(par_operations, word1, word2) == Multiset(
+            vec
+            for vec in set(vecs)
+            if not any(operations_lt(other, vec) for other in vecs)
+        )
+
+    par_operations_bruteforce("", "")
+    par_operations_bruteforce("ab", "bc")
+    par_operations_bruteforce("abba", "abab")
+    par_operations_bruteforce("alberta", "camera")
