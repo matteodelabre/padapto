@@ -12,7 +12,7 @@ from padapto.collections import Multiset, Record
 @dataclass(frozen=True)
 class EditionSignature[T](Signature[T]):
     unit: Callable[[], T]
-    combine: Callable[[T, T], T]
+    append: Callable[[T, T], T]
     match: Callable[[str, str], T]
     delete: Callable[[str], T]
     insert: Callable[[str], T]
@@ -36,15 +36,15 @@ def edition[T](
             change = delete = insert = alg.null()
 
             if i >= 1 and j >= 1:
-                change = alg.combine(
+                change = alg.append(
                     table[(i - 1, j - 1)], alg.match(word1[i - 1], word2[j - 1])
                 )
 
             if i >= 1:
-                delete = alg.combine(table[(i - 1, j)], alg.delete(word1[i - 1]))
+                delete = alg.append(table[(i - 1, j)], alg.delete(word1[i - 1]))
 
             if j >= 1:
-                insert = alg.combine(table[(i, j - 1)], alg.insert(word2[j - 1]))
+                insert = alg.append(table[(i, j - 1)], alg.insert(word2[j - 1]))
 
             table[(i, j)] = alg.multichoose(change, delete, insert)
 
@@ -56,7 +56,7 @@ min_cost = EditionSignature[int | float](
     null=lambda: inf,
     choose=min,
     unit=lambda: 0,
-    combine=operator.add,
+    append=operator.add,
     match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
     delete=lambda sym: 1,
     insert=lambda sym: 1,
@@ -114,7 +114,7 @@ count = EditionSignature[int](
     null=lambda: 0,
     choose=operator.add,
     unit=lambda: 1,
-    combine=operator.mul,
+    append=operator.mul,
     match=lambda sym1, sym2: 1,
     delete=lambda sym: 1,
     insert=lambda sym: 1,
@@ -132,7 +132,7 @@ one_align = EditionSignature[Align | None](
     null=lambda: None,
     choose=lambda x, y: y if x is None else x,
     unit=lambda: (),
-    combine=lambda x, y: x + y if x is not None and y is not None else None,
+    append=lambda x, y: x + y if x is not None and y is not None else None,
     match=lambda sym1, sym2: (("match", sym1, sym2),),
     delete=lambda sym: (("delete", sym),),
     insert=lambda sym: (("insert", sym),),
