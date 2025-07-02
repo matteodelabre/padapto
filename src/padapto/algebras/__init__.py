@@ -5,3 +5,6 @@ from .limit import limit as limit
 from .pareto import pareto as pareto
 from .power import power as power
 from .signature import Signature as Signature
+from .trace import CandidateNode as CandidateNode
+from .trace import enumerate_candidates as enumerate_candidates
+from .trace import trace as trace

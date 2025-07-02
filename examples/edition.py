@@ -2,10 +2,22 @@ import operator
 from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from itertools import islice
 from math import inf
 from typing import Literal
 
-from padapto.algebras import Signature, group, join, lex, limit, pareto, power
+from padapto.algebras import (
+    CandidateNode,
+    Signature,
+    enumerate_candidates,
+    group,
+    join,
+    lex,
+    limit,
+    pareto,
+    power,
+    trace,
+)
 from padapto.collections import Multiset, Record
 
 
@@ -123,27 +135,29 @@ if __name__ == "__main__":
 
 
 # Generate one of the possible alignments
-one_align = EditionSignature[Align | None](
-    null=lambda: None,
-    choose=lambda x, y: y if x is None else x,
-    unit=lambda: (),
-    match=lambda align, sym1, sym2: (
-        align + (("match", sym1, sym2),) if align is not None else None
-    ),
-    delete=lambda align, sym: align + (("delete", sym),) if align is not None else None,
-    insert=lambda align, sym: align + (("insert", sym),) if align is not None else None,
-)
+one_align = trace(EditionSignature)
+
+
+def flatten_align(node: CandidateNode) -> Align:
+    if not node.edges:
+        return ()
+
+    return flatten_align(node.edges[0].node) + (node.data,)
+
 
 if __name__ == "__main__":
-    assert edition(one_align, "", "") == ()
-    assert edition(one_align, "ab", "bc") == (("match", "a", "b"), ("match", "b", "c"))
-    assert edition(one_align, "abba", "abab") == (
+    assert flatten_align(edition(one_align, "", "")) == ()
+    assert flatten_align(edition(one_align, "ab", "bc")) == (
+        ("match", "a", "b"),
+        ("match", "b", "c"),
+    )
+    assert flatten_align(edition(one_align, "abba", "abab")) == (
         ("match", "a", "a"),
         ("match", "b", "b"),
         ("match", "b", "a"),
         ("match", "a", "b"),
     )
-    assert edition(one_align, "alberta", "camera") == (
+    assert flatten_align(edition(one_align, "alberta", "camera")) == (
         ("delete", "a"),
         ("match", "l", "c"),
         ("match", "b", "a"),
@@ -157,9 +171,14 @@ if __name__ == "__main__":
 # Generate all possible alignments
 all_aligns = one_align | power()
 
+
+def flatten_aligns(nodes: Multiset[CandidateNode]) -> Multiset[Align]:
+    return Multiset(map(flatten_align, nodes))
+
+
 if __name__ == "__main__":
-    assert edition(all_aligns, "", "") == Multiset(((),))
-    assert edition(all_aligns, "a", "b") == Multiset(
+    assert flatten_aligns(edition(all_aligns, "", "")) == Multiset(((),))
+    assert flatten_aligns(edition(all_aligns, "a", "b")) == Multiset(
         (
             (("match", "a", "b"),),
             (("delete", "a"), ("insert", "b")),
@@ -178,10 +197,10 @@ if __name__ == "__main__":
     all_aligns_bruteforce("alberta", "camera")
 
     assert edition(min_cost, "abba", "abab") == min(
-        cost_of(align) for align in edition(all_aligns, "abba", "abab")
+        cost_of(flatten_align(align)) for align in edition(all_aligns, "abba", "abab")
     )
     assert edition(all_min_costs, "abba", "abab") == Multiset(
-        cost_of(align) for align in edition(all_aligns, "abba", "abab")
+        cost_of(flatten_align(align)) for align in edition(all_aligns, "abba", "abab")
     )
 
 
@@ -201,7 +220,7 @@ if __name__ == "__main__":
             count=sum(
                 1
                 for align in edition(all_aligns, word1, word2)
-                if cost_of(align) == res_min_cost
+                if cost_of(flatten_align(align)) == res_min_cost
             ),
         )
 
@@ -215,91 +234,87 @@ if __name__ == "__main__":
 min_cost_aligns = join(cost=min_cost, solutions=all_aligns) | lex("cost")
 
 if __name__ == "__main__":
-    assert edition(min_cost_aligns, "", "") == Record(
-        cost=0,
-        solutions=Multiset(((),)),
+    assert edition(min_cost_aligns, "", "").cost == 0
+    assert flatten_aligns(edition(min_cost_aligns, "", "").solutions) == Multiset(((),))
+
+    assert edition(min_cost_aligns, "ab", "bc").cost == 2
+    assert flatten_aligns(edition(min_cost_aligns, "ab", "bc").solutions) == Multiset(
+        (
+            (("match", "a", "b"), ("match", "b", "c")),
+            (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
+        )
     )
 
-    assert edition(min_cost_aligns, "ab", "bc") == Record(
-        cost=2,
-        solutions=Multiset(
+    assert edition(min_cost_aligns, "abba", "abab").cost == 2
+    assert flatten_aligns(
+        edition(min_cost_aligns, "abba", "abab").solutions
+    ) == Multiset(
+        (
             (
-                (("match", "a", "b"), ("match", "b", "c")),
-                (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
-            )
-        ),
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("match", "b", "a"),
+                ("match", "a", "b"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("insert", "a"),
+                ("match", "b", "b"),
+                ("delete", "a"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("delete", "b"),
+                ("match", "b", "b"),
+                ("match", "a", "a"),
+                ("insert", "b"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("delete", "b"),
+                ("match", "a", "a"),
+                ("insert", "b"),
+            ),
+        )
     )
 
-    assert edition(min_cost_aligns, "abba", "abab") == Record(
-        cost=2,
-        solutions=Multiset(
+    assert edition(min_cost_aligns, "alberta", "camera").cost == 4
+    assert flatten_aligns(
+        edition(min_cost_aligns, "alberta", "camera").solutions
+    ) == Multiset(
+        (
             (
-                (
-                    ("match", "a", "a"),
-                    ("match", "b", "b"),
-                    ("match", "b", "a"),
-                    ("match", "a", "b"),
-                ),
-                (
-                    ("match", "a", "a"),
-                    ("match", "b", "b"),
-                    ("insert", "a"),
-                    ("match", "b", "b"),
-                    ("delete", "a"),
-                ),
-                (
-                    ("match", "a", "a"),
-                    ("delete", "b"),
-                    ("match", "b", "b"),
-                    ("match", "a", "a"),
-                    ("insert", "b"),
-                ),
-                (
-                    ("match", "a", "a"),
-                    ("match", "b", "b"),
-                    ("delete", "b"),
-                    ("match", "a", "a"),
-                    ("insert", "b"),
-                ),
-            )
-        ),
-    )
-
-    assert edition(min_cost_aligns, "alberta", "camera") == Record(
-        cost=4,
-        solutions=Multiset(
+                ("match", "a", "c"),
+                ("match", "l", "a"),
+                ("match", "b", "m"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
+            ),
             (
-                (
-                    ("match", "a", "c"),
-                    ("match", "l", "a"),
-                    ("match", "b", "m"),
-                    ("match", "e", "e"),
-                    ("match", "r", "r"),
-                    ("delete", "t"),
-                    ("match", "a", "a"),
-                ),
-                (
-                    ("insert", "c"),
-                    ("match", "a", "a"),
-                    ("delete", "l"),
-                    ("match", "b", "m"),
-                    ("match", "e", "e"),
-                    ("match", "r", "r"),
-                    ("delete", "t"),
-                    ("match", "a", "a"),
-                ),
-                (
-                    ("insert", "c"),
-                    ("match", "a", "a"),
-                    ("match", "l", "m"),
-                    ("delete", "b"),
-                    ("match", "e", "e"),
-                    ("match", "r", "r"),
-                    ("delete", "t"),
-                    ("match", "a", "a"),
-                ),
-            )
-        ),
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("delete", "l"),
+                ("match", "b", "m"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
+            ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("match", "l", "m"),
+                ("delete", "b"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
+            ),
+        )
     )
 
     def min_cost_aligns_bruteforce(word1: str, word2: str) -> None:
@@ -309,7 +324,7 @@ if __name__ == "__main__":
             solutions=Multiset(
                 align
                 for align in edition(all_aligns, word1, word2)
-                if cost_of(align) == res_min_cost
+                if cost_of(flatten_align(align)) == res_min_cost
             ),
         )
 
@@ -365,7 +380,8 @@ if __name__ == "__main__":
             (
                 Record(cost=key, count=value)
                 for key, value in Counter(
-                    cost_of(align) for align in edition(all_aligns, word1, word2)
+                    cost_of(flatten_align(align))
+                    for align in edition(all_aligns, word1, word2)
                 ).items()
             )
         )
@@ -455,7 +471,10 @@ if __name__ == "__main__":
     ) == Record(changes=0, deletes=1, inserts=1)
 
     def par_operations_bruteforce(word1: str, word2: str) -> None:
-        vecs = set(operations_of(align) for align in edition(all_aligns, word1, word2))
+        vecs = set(
+            operations_of(flatten_align(align))
+            for align in edition(all_aligns, word1, word2)
+        )
         assert edition(par_operations, word1, word2) == Multiset(
             vec for vec in vecs if not any(operations_lt(other, vec) for other in vecs)
         )
@@ -526,11 +545,15 @@ if __name__ == "__main__":
 
     def par_operations_count_bruteforce(word1: str, word2: str) -> None:
         res_aligns = edition(all_aligns, word1, word2)
-        vecs = set(operations_of(align) for align in res_aligns)
+        vecs = set(operations_of(flatten_align(align)) for align in res_aligns)
         assert edition(par_operations_count, word1, word2) == Multiset(
             Record(
                 operations=vec,
-                count=sum(1 for align in res_aligns if operations_of(align) == vec),
+                count=sum(
+                    1
+                    for align in res_aligns
+                    if operations_of(flatten_align(align)) == vec
+                ),
             )
             for vec in vecs
             if not any(operations_lt(other, vec) for other in vecs)
@@ -548,172 +571,154 @@ par_operations_aligns = (
 )
 
 if __name__ == "__main__":
-    assert edition(par_operations_aligns, "", "") == Multiset(
+    empty_aligns = edition(par_operations_aligns, "", "")
+    assert empty_aligns[0].operations == Record(changes=0, deletes=0, inserts=0)
+    assert flatten_aligns(empty_aligns[0].solutions) == Multiset(((),))
+
+    ab_bc_aligns = edition(par_operations_aligns, "ab", "bc")
+    assert ab_bc_aligns[0].operations == Record(changes=2, deletes=0, inserts=0)
+    assert flatten_aligns(ab_bc_aligns[0].solutions) == Multiset(
+        ((("match", "a", "b"), ("match", "b", "c")),)
+    )
+    assert ab_bc_aligns[1].operations == Record(changes=0, deletes=1, inserts=1)
+    assert flatten_aligns(ab_bc_aligns[1].solutions) == Multiset(
+        ((("delete", "a"), ("match", "b", "b"), ("insert", "c")),)
+    )
+
+    abba_abab_aligns = edition(par_operations_aligns, "abba", "abab")
+    assert abba_abab_aligns[0].operations == Record(changes=2, deletes=0, inserts=0)
+    assert flatten_aligns(abba_abab_aligns[0].solutions) == Multiset(
         (
-            Record(
-                operations=Record(changes=0, deletes=0, inserts=0),
-                solutions=Multiset(((),)),
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("match", "b", "a"),
+                ("match", "a", "b"),
+            ),
+        )
+    )
+    assert abba_abab_aligns[1].operations == Record(changes=0, deletes=1, inserts=1)
+    assert flatten_aligns(abba_abab_aligns[1].solutions) == Multiset(
+        (
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("insert", "a"),
+                ("match", "b", "b"),
+                ("delete", "a"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("delete", "b"),
+                ("match", "b", "b"),
+                ("match", "a", "a"),
+                ("insert", "b"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("delete", "b"),
+                ("match", "a", "a"),
+                ("insert", "b"),
             ),
         )
     )
 
-    assert edition(par_operations_aligns, "ab", "bc") == Multiset(
+    alberta_camera_aligns = edition(par_operations_aligns, "alberta", "camera")
+    assert alberta_camera_aligns[0].operations == Record(
+        changes=3, deletes=1, inserts=0
+    )
+    assert flatten_aligns(alberta_camera_aligns[0].solutions) == Multiset(
         (
-            Record(
-                operations=Record(changes=2, deletes=0, inserts=0),
-                solutions=Multiset(((("match", "a", "b"), ("match", "b", "c")),)),
-            ),
-            Record(
-                operations=Record(changes=0, deletes=1, inserts=1),
-                solutions=Multiset(
-                    ((("delete", "a"), ("match", "b", "b"), ("insert", "c")),)
-                ),
+            (
+                ("match", "a", "c"),
+                ("match", "l", "a"),
+                ("match", "b", "m"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
             ),
         )
     )
-
-    assert edition(par_operations_aligns, "abba", "abab") == Multiset(
+    assert alberta_camera_aligns[1].operations == Record(
+        changes=1, deletes=2, inserts=1
+    )
+    assert flatten_aligns(alberta_camera_aligns[1].solutions) == Multiset(
         (
-            Record(
-                operations=Record(changes=2, deletes=0, inserts=0),
-                solutions=Multiset(
-                    (
-                        (
-                            ("match", "a", "a"),
-                            ("match", "b", "b"),
-                            ("match", "b", "a"),
-                            ("match", "a", "b"),
-                        ),
-                    )
-                ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("delete", "l"),
+                ("match", "b", "m"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
             ),
-            Record(
-                operations=Record(changes=0, deletes=1, inserts=1),
-                solutions=Multiset(
-                    (
-                        (
-                            ("match", "a", "a"),
-                            ("match", "b", "b"),
-                            ("insert", "a"),
-                            ("match", "b", "b"),
-                            ("delete", "a"),
-                        ),
-                        (
-                            ("match", "a", "a"),
-                            ("delete", "b"),
-                            ("match", "b", "b"),
-                            ("match", "a", "a"),
-                            ("insert", "b"),
-                        ),
-                        (
-                            ("match", "a", "a"),
-                            ("match", "b", "b"),
-                            ("delete", "b"),
-                            ("match", "a", "a"),
-                            ("insert", "b"),
-                        ),
-                    )
-                ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("match", "l", "m"),
+                ("delete", "b"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
             ),
         )
     )
-
-    assert edition(par_operations_aligns, "alberta", "camera") == Multiset(
+    assert alberta_camera_aligns[2].operations == Record(
+        changes=0, deletes=3, inserts=2
+    )
+    assert flatten_aligns(alberta_camera_aligns[2].solutions) == Multiset(
         (
-            Record(
-                operations=Record(changes=3, deletes=1, inserts=0),
-                solutions=Multiset(
-                    (
-                        (
-                            ("match", "a", "c"),
-                            ("match", "l", "a"),
-                            ("match", "b", "m"),
-                            ("match", "e", "e"),
-                            ("match", "r", "r"),
-                            ("delete", "t"),
-                            ("match", "a", "a"),
-                        ),
-                    )
-                ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("insert", "m"),
+                ("delete", "l"),
+                ("delete", "b"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
             ),
-            Record(
-                operations=Record(changes=1, deletes=2, inserts=1),
-                solutions=Multiset(
-                    (
-                        (
-                            ("insert", "c"),
-                            ("match", "a", "a"),
-                            ("delete", "l"),
-                            ("match", "b", "m"),
-                            ("match", "e", "e"),
-                            ("match", "r", "r"),
-                            ("delete", "t"),
-                            ("match", "a", "a"),
-                        ),
-                        (
-                            ("insert", "c"),
-                            ("match", "a", "a"),
-                            ("match", "l", "m"),
-                            ("delete", "b"),
-                            ("match", "e", "e"),
-                            ("match", "r", "r"),
-                            ("delete", "t"),
-                            ("match", "a", "a"),
-                        ),
-                    )
-                ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("delete", "l"),
+                ("insert", "m"),
+                ("delete", "b"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
             ),
-            Record(
-                operations=Record(changes=0, deletes=3, inserts=2),
-                solutions=Multiset(
-                    (
-                        (
-                            ("insert", "c"),
-                            ("match", "a", "a"),
-                            ("insert", "m"),
-                            ("delete", "l"),
-                            ("delete", "b"),
-                            ("match", "e", "e"),
-                            ("match", "r", "r"),
-                            ("delete", "t"),
-                            ("match", "a", "a"),
-                        ),
-                        (
-                            ("insert", "c"),
-                            ("match", "a", "a"),
-                            ("delete", "l"),
-                            ("insert", "m"),
-                            ("delete", "b"),
-                            ("match", "e", "e"),
-                            ("match", "r", "r"),
-                            ("delete", "t"),
-                            ("match", "a", "a"),
-                        ),
-                        (
-                            ("insert", "c"),
-                            ("match", "a", "a"),
-                            ("delete", "l"),
-                            ("delete", "b"),
-                            ("insert", "m"),
-                            ("match", "e", "e"),
-                            ("match", "r", "r"),
-                            ("delete", "t"),
-                            ("match", "a", "a"),
-                        ),
-                    )
-                ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("delete", "l"),
+                ("delete", "b"),
+                ("insert", "m"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
             ),
         )
     )
 
     def par_operations_aligns_bruteforce(word1: str, word2: str) -> None:
         res_aligns = edition(all_aligns, word1, word2)
-        vecs = set(operations_of(align) for align in res_aligns)
+        vecs = set(operations_of(flatten_align(align)) for align in res_aligns)
         assert edition(par_operations_aligns, word1, word2) == Multiset(
             Record(
                 operations=vec,
                 solutions=Multiset(
-                    align for align in res_aligns if operations_of(align) == vec
+                    align
+                    for align in res_aligns
+                    if operations_of(flatten_align(align)) == vec
                 ),
             )
             for vec in vecs
@@ -724,3 +729,86 @@ if __name__ == "__main__":
     par_operations_aligns_bruteforce("ab", "bc")
     par_operations_aligns_bruteforce("abba", "abab")
     par_operations_aligns_bruteforce("alberta", "camera")
+
+
+# Generate a graph of all candidates, or only of optimal ones
+ed_graph = trace(EditionSignature, single=False)
+min_ed_graph = join(cost=min_cost, graph=ed_graph) | lex("cost")
+
+
+if __name__ == "__main__":
+    assert edition(ed_graph, "", "") == CandidateNode(("unit",))
+
+    graph_ab_bc_21 = CandidateNode(("insert", "b")).add(CandidateNode(("unit",)))
+
+    graph_ab_bc_10 = CandidateNode(("delete", "a")).add(CandidateNode(("unit",)))
+
+    graph_ab_bc_11 = (
+        CandidateNode(("choose",))
+        .add(CandidateNode(("delete", "a")).add(graph_ab_bc_21))
+        .add(CandidateNode(("insert", "b")).add(graph_ab_bc_10))
+        .add(CandidateNode(("match", "a", "b")).add(CandidateNode(("unit",))))
+    )
+
+    assert edition(ed_graph, "ab", "bc") == (
+        CandidateNode(("choose",))
+        .add(
+            CandidateNode(("delete", "b")).add(
+                CandidateNode(("choose",))
+                .add(
+                    CandidateNode(("delete", "a")).add(
+                        CandidateNode(("insert", "c")).add(graph_ab_bc_21)
+                    )
+                )
+                .add(CandidateNode(("insert", "c")).add(graph_ab_bc_11))
+                .add(CandidateNode(("match", "a", "c")).add(graph_ab_bc_21))
+            )
+        )
+        .add(
+            CandidateNode(("insert", "c")).add(
+                CandidateNode(("choose",))
+                .add(CandidateNode(("delete", "b")).add(graph_ab_bc_11))
+                .add(
+                    CandidateNode(("insert", "b")).add(
+                        CandidateNode(("delete", "b")).add(graph_ab_bc_10)
+                    )
+                )
+                .add(CandidateNode(("match", "b", "b")).add(graph_ab_bc_10))
+            )
+        )
+        .add(CandidateNode(("match", "b", "c")).add(graph_ab_bc_11))
+    )
+
+    assert edition(min_ed_graph, "ab", "bc") == Record(
+        cost=2,
+        graph=(
+            CandidateNode(("choose",))
+            .add(
+                CandidateNode(("insert", "c")).add(
+                    CandidateNode(("match", "b", "b")).add(
+                        CandidateNode(("delete", "a")).add(CandidateNode(("unit",)))
+                    )
+                )
+            )
+            .add(
+                CandidateNode(("match", "b", "c")).add(
+                    CandidateNode(("match", "a", "b")).add(CandidateNode(("unit",)))
+                )
+            )
+        ),
+    )
+
+    def enumerate_all_aligns_bruteforce(word1: str, word2: str):
+        assert Multiset(
+            enumerate_candidates(edition(ed_graph, word1, word2))
+        ) == edition(all_aligns, word1, word2)
+
+    enumerate_all_aligns_bruteforce("", "")
+    enumerate_all_aligns_bruteforce("ab", "bc")
+    enumerate_all_aligns_bruteforce("abba", "abab")
+    enumerate_all_aligns_bruteforce("alberta", "camera")
+
+    # For n=15, there are 44,642,381,823 solutions; the following will only finish if
+    # `enumerate_candidates` generates its solutions lazily
+    graph = edition(ed_graph, "a" * 15, "a" * 15)
+    sols = list(islice(enumerate_candidates(graph), 100))
