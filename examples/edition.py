@@ -12,10 +12,9 @@ from padapto.collections import Multiset, Record
 @dataclass(frozen=True)
 class EditionSignature[T](Signature[T]):
     unit: Callable[[], T]
-    append: Callable[[T, T], T]
-    match: Callable[[str, str], T]
-    delete: Callable[[str], T]
-    insert: Callable[[str], T]
+    match: Callable[[T, str, str], T]
+    delete: Callable[[T, str], T]
+    insert: Callable[[T, str], T]
 
 
 def edition[T](
@@ -36,15 +35,13 @@ def edition[T](
             change = delete = insert = alg.null()
 
             if i >= 1 and j >= 1:
-                change = alg.append(
-                    table[(i - 1, j - 1)], alg.match(word1[i - 1], word2[j - 1])
-                )
+                change = alg.match(table[(i - 1, j - 1)], word1[i - 1], word2[j - 1])
 
             if i >= 1:
-                delete = alg.append(table[(i - 1, j)], alg.delete(word1[i - 1]))
+                delete = alg.delete(table[(i - 1, j)], word1[i - 1])
 
             if j >= 1:
-                insert = alg.append(table[(i, j - 1)], alg.insert(word2[j - 1]))
+                insert = alg.insert(table[(i, j - 1)], word2[j - 1])
 
             table[(i, j)] = alg.multichoose(change, delete, insert)
 
@@ -56,10 +53,9 @@ min_cost = EditionSignature[int | float](
     null=lambda: inf,
     choose=min,
     unit=lambda: 0,
-    append=operator.add,
-    match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
-    delete=lambda sym: 1,
-    insert=lambda sym: 1,
+    match=lambda cost, sym1, sym2: cost + 1 if sym1 != sym2 else cost,
+    delete=lambda cost, sym: cost + 1,
+    insert=lambda cost, sym: cost + 1,
 )
 
 type Align = tuple[
@@ -114,10 +110,9 @@ count = EditionSignature[int](
     null=lambda: 0,
     choose=operator.add,
     unit=lambda: 1,
-    append=operator.mul,
-    match=lambda sym1, sym2: 1,
-    delete=lambda sym: 1,
-    insert=lambda sym: 1,
+    match=lambda count, sym1, sym2: count,
+    delete=lambda count, sym: count,
+    insert=lambda count, sym: count,
 )
 
 if __name__ == "__main__":
@@ -132,10 +127,11 @@ one_align = EditionSignature[Align | None](
     null=lambda: None,
     choose=lambda x, y: y if x is None else x,
     unit=lambda: (),
-    append=lambda x, y: x + y if x is not None and y is not None else None,
-    match=lambda sym1, sym2: (("match", sym1, sym2),),
-    delete=lambda sym: (("delete", sym),),
-    insert=lambda sym: (("insert", sym),),
+    match=lambda align, sym1, sym2: (
+        align + (("match", sym1, sym2),) if align is not None else None
+    ),
+    delete=lambda align, sym: align + (("delete", sym),) if align is not None else None,
+    insert=lambda align, sym: align + (("insert", sym),) if align is not None else None,
 )
 
 if __name__ == "__main__":
@@ -383,21 +379,21 @@ if __name__ == "__main__":
 # Compute the Pareto-optimal number of operations of each type
 min_change = replace(
     min_cost,
-    match=lambda sym1, sym2: 1 if sym1 != sym2 else 0,
-    delete=lambda sym: 0,
-    insert=lambda sym: 0,
+    match=lambda count, sym1, sym2: count + 1 if sym1 != sym2 else count,
+    delete=lambda count, sym: count,
+    insert=lambda count, sym: count,
 )
 min_delete = replace(
     min_cost,
-    match=lambda sym1, sym2: 0,
-    delete=lambda sym: 1,
-    insert=lambda sym: 0,
+    match=lambda count, sym1, sym2: count,
+    delete=lambda count, sym: count + 1,
+    insert=lambda count, sym: count,
 )
 min_insert = replace(
     min_cost,
-    match=lambda sym1, sym2: 0,
-    delete=lambda sym: 0,
-    insert=lambda sym: 1,
+    match=lambda count, sym1, sym2: count,
+    delete=lambda count, sym: count,
+    insert=lambda count, sym: count + 1,
 )
 operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
 par_operations = operations | power() | pareto("*")
