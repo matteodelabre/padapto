@@ -162,25 +162,27 @@ def enumerate_candidates(root: CandidateNode) -> Iterable[CandidateNode]:
         yield CandidateNode(root.data).extend(children)
 
 
-def graph_to_dot(root: CandidateNode) -> str:
-    """Create a representation of a signature call graph in DOT format."""
-    # Appearance of choice nodes
-    choose_style = {
-        "label": "+",
-        "shape": "square",
-        "style": "filled",
-        "fillcolor": "lightgray",
-        "height": "0",
-    }
+default_choose_node_style = {
+    "label": "+",
+    "shape": "square",
+    "style": "filled",
+    "fillcolor": "lightgray",
+    "height": "0",
+}
+default_node_style = {"shape": "box", "style": "rounded", "ordering": "out"}
 
-    # Appearance of all other nodes
-    default_style = {
-        "shape": "box",
-        "style": "rounded",
-        "ordering": "out",  # ensure left-to-right order of outgoing edges is preserved
-    }
+
+def graph_to_dot(
+    root: CandidateNode,
+    choose_style: dict[str, str] = default_choose_node_style,
+    default_style: dict[str, str] = default_node_style,
+    **graph_attributes: dict[str, str],
+) -> str:
+    """Create a representation of a signature call graph in DOT format."""
 
     lines = ["digraph {"]
+    for key, value in graph_attributes.items():
+        lines.append(f'  {key}="{value}";')
     escape_rules = str.maketrans({'"': r"\""})
     ids: dict[CandidateNode, int] = {}
 
