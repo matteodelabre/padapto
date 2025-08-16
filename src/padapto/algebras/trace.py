@@ -19,9 +19,30 @@ def _is_null(node: CandidateNode) -> bool:
 def _is_choose(node: CandidateNode) -> bool:
     return node.data == choose_node.data
 
+
 def _is_loss(node: CandidateNode) -> bool:
     """Check if the node is a loss node."""
     return node.data[0] == "loss" if node.data else False
+
+
+def _is_spe(node: CandidateNode) -> bool:
+    """Check if the node is a speciation node."""
+    return node.data[0] == "S" if node.data else False
+
+
+def _is_transfer(node: CandidateNode) -> bool:
+    """Check if the node is a transfer node."""
+    return node.data[0] == "T" if node.data else False
+
+
+def _is_dup(node: CandidateNode) -> bool:
+    """Check if the node is a duplication node."""
+    return node.data[0] == "D" if node.data else False
+
+
+def _is_association(node: CandidateNode) -> bool:
+    """Check if the node is an association node."""
+    return node.data[0] == "A" if node.data else False
 
 
 def _children(node: CandidateNode) -> tuple[CandidateNode, ...]:
@@ -174,18 +195,23 @@ default_choose_node_style = {
     "height": "0",
 }
 default_node_style = {"shape": "box", "style": "rounded", "ordering": "out"}
-default_loss_node_style = {
-        "shape": "box",
-        "style": "filled",
-        "fillcolor": "red",
-        }
+default_spe_node_style = default_node_style 
+default_loss_node_style = default_node_style 
+default_transfer_node_style = default_node_style
+default_dup_node_style = default_node_style
+default_association_node_style = default_node_style
+
 
 
 def graph_to_dot(
     root: CandidateNode,
     choose_style: dict[str, str] = default_choose_node_style,
     default_style: dict[str, str] = default_node_style,
-    loss_style: dict[str, str] = {"label": "loss", "shape": "box", "style": "filled", "fillcolor": "red"},
+    loss_style: dict[str, str] = default_loss_node_style,
+    spe_style: dict[str, str] = default_spe_node_style,
+    transfer_style: dict[str, str] = default_transfer_node_style,
+    dup_style: dict[str, str] = default_dup_node_style,
+    association_style: dict[str, str] = default_association_node_style,
     **graph_attributes: dict[str, str],
 ) -> str:
     """Create a representation of a signature call graph in DOT format."""
@@ -208,8 +234,24 @@ def graph_to_dot(
         head, *args = source.data
         label = f"{head}({', '.join(map(repr, args))})" if args else head
 
+        def node_style(source: CandidateNode) -> dict[str, str]:
+            if _is_choose(source):
+                return choose_style
+            elif _is_loss(source):
+                return loss_style
+            elif _is_spe(source):
+                return spe_style
+            elif _is_transfer(source):
+                return transfer_style
+            elif _is_dup(source):
+                return dup_style
+            elif _is_association(source):
+                return association_style
+            else:
+                return default_style
+
         style = {"label": label}
-        style = style | (choose_style if _is_choose(source) else (loss_style if _is_loss(source) else default_style))
+        style = style | node_style(source)
         attrs = ", ".join(
             f'{key}="{value.translate(escape_rules)}"' for key, value in style.items()
         )
