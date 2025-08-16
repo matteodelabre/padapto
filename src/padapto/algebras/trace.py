@@ -19,6 +19,10 @@ def _is_null(node: CandidateNode) -> bool:
 def _is_choose(node: CandidateNode) -> bool:
     return node.data == choose_node.data
 
+def _is_loss(node: CandidateNode) -> bool:
+    """Check if the node is a loss node."""
+    return node.data[0] == "loss" if node.data else False
+
 
 def _children(node: CandidateNode) -> tuple[CandidateNode, ...]:
     return tuple(edge.node for edge in node.edges)
@@ -170,12 +174,18 @@ default_choose_node_style = {
     "height": "0",
 }
 default_node_style = {"shape": "box", "style": "rounded", "ordering": "out"}
+default_loss_node_style = {
+        "shape": "box",
+        "style": "filled",
+        "fillcolor": "red",
+        }
 
 
 def graph_to_dot(
     root: CandidateNode,
     choose_style: dict[str, str] = default_choose_node_style,
     default_style: dict[str, str] = default_node_style,
+    loss_style: dict[str, str] = {"label": "loss", "shape": "box", "style": "filled", "fillcolor": "red"},
     **graph_attributes: dict[str, str],
 ) -> str:
     """Create a representation of a signature call graph in DOT format."""
@@ -199,7 +209,7 @@ def graph_to_dot(
         label = f"{head}({', '.join(map(repr, args))})" if args else head
 
         style = {"label": label}
-        style = style | (choose_style if _is_choose(source) else default_style)
+        style = style | (choose_style if _is_choose(source) else (loss_style if _is_loss(source) else default_style))
         attrs = ", ".join(
             f'{key}="{value.translate(escape_rules)}"' for key, value in style.items()
         )
