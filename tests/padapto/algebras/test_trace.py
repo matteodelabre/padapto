@@ -2,8 +2,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
+from sowing import Node
+
 from padapto.algebras.signature import Signature
-from padapto.algebras.trace import CandidateNode, enumerate_candidates, trace
+from padapto.algebras.trace import (
+    Circuit,
+    CircuitData,
+    enumerate_solutions,
+    get_solution,
+    trace,
+)
 
 from .test_signature import SemiRing
 
@@ -17,46 +25,36 @@ class MultiSemiRing[T](Signature[T]):
 
 
 def test_trace_product():
-    alg = cast(SemiRing[CandidateNode], trace(MultiSemiRing))
+    alg = cast(SemiRing[Circuit], trace(MultiSemiRing))
 
-    assert alg.null() == CandidateNode(("null",))
-    assert alg.unit1() == CandidateNode(("unit1",))
+    assert alg.null() == Node(CircuitData(operator="null"))
+    assert alg.unit1() == Node(CircuitData(operator="unit1"))
 
     assert alg.combine(alg.unit1(), alg.unit1()) == (
-        CandidateNode(("combine",))
-        .add(CandidateNode(("unit1",)))
-        .add(CandidateNode(("unit1",)))
+        Node(CircuitData(operator="combine"))
+        .add(Node(CircuitData(operator="unit1")))
+        .add(Node(CircuitData(operator="unit1")))
     )
 
     assert alg.combine(alg.unit1(), alg.null()) == alg.null()
     assert alg.combine(alg.null(), alg.unit1()) == alg.null()
 
     assert alg.combine(alg.unit1(), alg.combine(alg.unit1(), alg.unit1())) == (
-        CandidateNode(("combine",))
-        .add(CandidateNode(("unit1",)))
+        Node(CircuitData(operator="combine"))
+        .add(Node(CircuitData(operator="unit1")))
         .add(
-            CandidateNode(("combine",))
-            .add(CandidateNode(("unit1",)))
-            .add(CandidateNode(("unit1",)))
+            Node(CircuitData(operator="combine"))
+            .add(Node(CircuitData(operator="unit1")))
+            .add(Node(CircuitData(operator="unit1")))
         )
     )
 
 
-def test_trace_choice_single():
-    alg = cast(SemiRing[CandidateNode], trace(MultiSemiRing, single=True))
-
-    assert alg.choose(alg.unit1(), alg.unit2()) == alg.unit1()
-    assert alg.choose(alg.unit1(), alg.null()) == alg.unit1()
-    assert alg.choose(alg.null(), alg.unit2()) == alg.unit2()
-    assert alg.choose(alg.null(), alg.null()) == alg.null()
-    assert alg.multichoose() == alg.null()
-
-
-def test_trace_choice_all():
-    alg = cast(SemiRing[CandidateNode], trace(MultiSemiRing, single=False))
+def test_trace_choice():
+    alg = cast(SemiRing[Circuit], trace(MultiSemiRing))
 
     assert alg.choose(alg.unit1(), alg.unit2()) == (
-        CandidateNode(("choose",)).add(alg.unit1()).add(alg.unit2())
+        Node(CircuitData(operator="choose")).add(alg.unit1()).add(alg.unit2())
     )
 
     # Neutral element
@@ -64,9 +62,6 @@ def test_trace_choice_all():
     assert alg.multichoose() == alg.null()
     assert alg.choose(alg.unit1(), alg.null()) == alg.unit1()
     assert alg.choose(alg.null(), alg.unit1()) == alg.unit1()
-
-    # Commutativity
-    assert alg.choose(alg.unit1(), alg.unit2()) == alg.choose(alg.unit2(), alg.unit1())
 
     # Idempotency
     assert alg.choose(alg.unit1(), alg.unit1()) == alg.unit1()
@@ -82,11 +77,25 @@ def test_trace_choice_all():
     )
 
 
-def test_trace_enumerate_candidates():
-    alg = cast(SemiRing[CandidateNode], trace(MultiSemiRing, single=False))
+def test_trace_enumerate_one():
+    alg = cast(SemiRing[Circuit], trace(MultiSemiRing))
+
+    assert (
+        get_solution(
+            alg.choose(
+                alg.unit1(),
+                alg.unit2(),
+            )
+        )
+        == alg.unit1()
+    )
+
+
+def test_trace_enumerate_all():
+    alg = cast(SemiRing[Circuit], trace(MultiSemiRing))
 
     assert list(
-        enumerate_candidates(
+        enumerate_solutions(
             alg.choose(
                 alg.unit1(),
                 alg.unit2(),
@@ -95,7 +104,7 @@ def test_trace_enumerate_candidates():
     ) == [alg.unit1(), alg.unit2()]
 
     assert list(
-        enumerate_candidates(
+        enumerate_solutions(
             alg.combine(
                 alg.choose(
                     alg.unit1(),

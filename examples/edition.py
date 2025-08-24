@@ -1,15 +1,16 @@
 import operator
 from collections import Counter, defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from itertools import islice
 from math import inf
 from typing import Literal
 
 from padapto.algebras import (
-    CandidateNode,
+    Circuit,
     Signature,
-    enumerate_candidates,
+    enumerate_solutions,
+    get_solution,
     group,
     join,
     lex,
@@ -17,6 +18,9 @@ from padapto.algebras import (
     pareto,
     power,
     trace,
+)
+from padapto.algebras import (
+    make_circuit_node as node,
 )
 from padapto.collections import Multiset, Record
 
@@ -134,30 +138,120 @@ if __name__ == "__main__":
     assert edition(count, "alberta", "camera") == 19825
 
 
-# Generate one of the possible alignments
-one_align = trace(EditionSignature)
-
-
-def flatten_align(node: CandidateNode) -> Align:
-    if not node.edges:
-        return ()
-
-    return flatten_align(node.edges[0].node) + (node.data,)
+# Generate circuits representing the possible alignments
+trace_align = trace(EditionSignature)
 
 
 if __name__ == "__main__":
-    assert flatten_align(edition(one_align, "", "")) == ()
-    assert flatten_align(edition(one_align, "ab", "bc")) == (
+    choose = node("choose")
+    unit = node("unit")
+
+    assert edition(trace_align, "", "") == unit
+
+    circ_ab_bc_21 = node("insert", ("b",)).add(unit)
+    circ_ab_bc_10 = node("delete", ("a",)).add(unit)
+    circ_ab_bc_11 = (
+        choose.add(node("match", ("a", "b")).add(unit))
+        .add(node("delete", ("a",)).add(circ_ab_bc_21))
+        .add(node("insert", ("b",)).add(circ_ab_bc_10))
+    )
+
+    assert edition(trace_align, "ab", "bc") == (
+        choose.add(node("match", ("b", "c")).add(circ_ab_bc_11))
+        .add(
+            node("delete", ("b",)).add(
+                choose.add(node("match", ("a", "c")).add(circ_ab_bc_21))
+                .add(
+                    node("delete", ("a",)).add(
+                        node("insert", ("c",)).add(circ_ab_bc_21)
+                    )
+                )
+                .add(node("insert", ("c",)).add(circ_ab_bc_11))
+            )
+        )
+        .add(
+            node("insert", ("c",)).add(
+                choose.add(node("match", ("b", "b")).add(circ_ab_bc_10))
+                .add(node("delete", ("b",)).add(circ_ab_bc_11))
+                .add(
+                    node("insert", ("b",)).add(
+                        node("delete", ("b",)).add(circ_ab_bc_10)
+                    )
+                )
+            )
+        )
+    )
+
+
+# Enumerate solutions from the generated circuits
+def flatten_align(solution: Circuit) -> Align:
+    if not solution.edges:
+        return ()
+
+    operation = (solution.data.operator, *solution.data.args)
+    return flatten_align(solution.edges[0].node) + (operation,)
+
+
+def one_align(circuit: Circuit) -> Align:
+    return flatten_align(get_solution(circuit))
+
+
+def all_aligns(circuit: Circuit) -> Iterable[Align]:
+    for solution in enumerate_solutions(circuit):
+        yield flatten_align(solution)
+
+
+def iterables_equal[T](left: Iterable[T], right: Iterable[T]) -> bool:
+    try:
+        for lhs, rhs in zip(left, right, strict=True):
+            if lhs != rhs:
+                return False
+    except ValueError:
+        # Iterables have different lengths
+        return False
+
+    return True
+
+
+if __name__ == "__main__":
+    assert one_align(edition(trace_align, "", "")) == ()
+    assert iterables_equal(
+        all_aligns(edition(trace_align, "", "")),
+        ((),),
+    )
+
+    assert one_align(edition(trace_align, "ab", "bc")) == (
         ("match", "a", "b"),
         ("match", "b", "c"),
     )
-    assert flatten_align(edition(one_align, "abba", "abab")) == (
+    assert iterables_equal(
+        all_aligns(edition(trace_align, "ab", "bc")),
+        (
+            (("match", "a", "b"), ("match", "b", "c")),
+            (("insert", "b"), ("delete", "a"), ("match", "b", "c")),
+            (("delete", "a"), ("insert", "b"), ("match", "b", "c")),
+            (("insert", "b"), ("match", "a", "c"), ("delete", "b")),
+            (("insert", "b"), ("insert", "c"), ("delete", "a"), ("delete", "b")),
+            (("match", "a", "b"), ("insert", "c"), ("delete", "b")),
+            (("insert", "b"), ("delete", "a"), ("insert", "c"), ("delete", "b")),
+            (("delete", "a"), ("insert", "b"), ("insert", "c"), ("delete", "b")),
+            (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
+            (("match", "a", "b"), ("delete", "b"), ("insert", "c")),
+            (("insert", "b"), ("delete", "a"), ("delete", "b"), ("insert", "c")),
+            (("delete", "a"), ("insert", "b"), ("delete", "b"), ("insert", "c")),
+            (("delete", "a"), ("delete", "b"), ("insert", "b"), ("insert", "c")),
+        ),
+    )
+
+    assert one_align(edition(trace_align, "abba", "abab")) == (
         ("match", "a", "a"),
         ("match", "b", "b"),
         ("match", "b", "a"),
         ("match", "a", "b"),
     )
-    assert flatten_align(edition(one_align, "alberta", "camera")) == (
+    # Retrieving all aligns on this example would yield 321 results
+
+    assert one_align(edition(trace_align, "alberta", "camera")) == (
         ("delete", "a"),
         ("match", "l", "c"),
         ("match", "b", "a"),
@@ -166,41 +260,28 @@ if __name__ == "__main__":
         ("match", "t", "r"),
         ("match", "a", "a"),
     )
-
-
-# Generate all possible alignments
-all_aligns = one_align | power()
-
-
-def flatten_aligns(nodes: Multiset[CandidateNode]) -> Multiset[Align]:
-    return Multiset(map(flatten_align, nodes))
-
-
-if __name__ == "__main__":
-    assert flatten_aligns(edition(all_aligns, "", "")) == Multiset(((),))
-    assert flatten_aligns(edition(all_aligns, "a", "b")) == Multiset(
-        (
-            (("match", "a", "b"),),
-            (("delete", "a"), ("insert", "b")),
-            (("insert", "b"), ("delete", "a")),
-        )
-    )
-    # edition(all_aligns, "abba", "abab") == Multiset(<... 321 results ...>)
-    # edition(all_aligns, "alberta", "camera") == Multiset(<... 19825 results ...>)
+    # Retrieving all aligns on this example would yield 19825 results
 
     def all_aligns_bruteforce(word1: str, word2: str) -> None:
-        assert len(edition(all_aligns, word1, word2)) == edition(count, word1, word2)
+        total = sum(1 for _ in all_aligns(edition(trace_align, word1, word2)))
+        assert total == edition(count, word1, word2)
 
     all_aligns_bruteforce("", "")
     all_aligns_bruteforce("ab", "bc")
     all_aligns_bruteforce("abba", "abab")
     all_aligns_bruteforce("alberta", "camera")
 
+    # For n=15, there are 44,642,381,823 solutions; the following will only finish if
+    # `enumerate_candidates` generates its solutions lazily
+    circuit = edition(trace_align, "a" * 15, "a" * 15)
+    sols = list(islice(enumerate_solutions(circuit), 100))
+
+    # Check that the minimum cost value is correct
     assert edition(min_cost, "abba", "abab") == min(
-        cost_of(flatten_align(align)) for align in edition(all_aligns, "abba", "abab")
+        cost_of(align) for align in all_aligns(edition(trace_align, "abba", "abab"))
     )
     assert edition(all_min_costs, "abba", "abab") == Multiset(
-        cost_of(flatten_align(align)) for align in edition(all_aligns, "abba", "abab")
+        cost_of(align) for align in all_aligns(edition(trace_align, "abba", "abab"))
     )
 
 
@@ -219,8 +300,8 @@ if __name__ == "__main__":
             cost=res_min_cost,
             count=sum(
                 1
-                for align in edition(all_aligns, word1, word2)
-                if cost_of(flatten_align(align)) == res_min_cost
+                for align in all_aligns(edition(trace_align, word1, word2))
+                if cost_of(align) == res_min_cost
             ),
         )
 
@@ -231,24 +312,27 @@ if __name__ == "__main__":
 
 
 # Compute the set of alignments of minimum cost
-min_cost_aligns = join(cost=min_cost, solutions=all_aligns) | lex("cost")
+min_cost_aligns = join(cost=min_cost, solutions=trace_align) | lex("cost")
 
 if __name__ == "__main__":
     assert edition(min_cost_aligns, "", "").cost == 0
-    assert flatten_aligns(edition(min_cost_aligns, "", "").solutions) == Multiset(((),))
+    assert iterables_equal(
+        all_aligns(edition(min_cost_aligns, "", "").solutions),
+        ((),),
+    )
 
     assert edition(min_cost_aligns, "ab", "bc").cost == 2
-    assert flatten_aligns(edition(min_cost_aligns, "ab", "bc").solutions) == Multiset(
+    assert iterables_equal(
+        all_aligns(edition(min_cost_aligns, "ab", "bc").solutions),
         (
             (("match", "a", "b"), ("match", "b", "c")),
             (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
-        )
+        ),
     )
 
     assert edition(min_cost_aligns, "abba", "abab").cost == 2
-    assert flatten_aligns(
-        edition(min_cost_aligns, "abba", "abab").solutions
-    ) == Multiset(
+    assert iterables_equal(
+        all_aligns(edition(min_cost_aligns, "abba", "abab").solutions),
         (
             (
                 ("match", "a", "a"),
@@ -277,13 +361,12 @@ if __name__ == "__main__":
                 ("match", "a", "a"),
                 ("insert", "b"),
             ),
-        )
+        ),
     )
 
     assert edition(min_cost_aligns, "alberta", "camera").cost == 4
-    assert flatten_aligns(
-        edition(min_cost_aligns, "alberta", "camera").solutions
-    ) == Multiset(
+    assert iterables_equal(
+        all_aligns(edition(min_cost_aligns, "alberta", "camera").solutions),
         (
             (
                 ("match", "a", "c"),
@@ -314,17 +397,18 @@ if __name__ == "__main__":
                 ("delete", "t"),
                 ("match", "a", "a"),
             ),
-        )
+        ),
     )
 
     def min_cost_aligns_bruteforce(word1: str, word2: str) -> None:
-        res_min_cost = edition(min_cost, word1, word2)
-        assert edition(min_cost_aligns, word1, word2) == Record(
-            cost=res_min_cost,
-            solutions=Multiset(
+        result = edition(min_cost_aligns, word1, word2)
+        assert result.cost == edition(min_cost, word1, word2)
+        assert iterables_equal(
+            all_aligns(result.solutions),
+            (
                 align
-                for align in edition(all_aligns, word1, word2)
-                if cost_of(flatten_align(align)) == res_min_cost
+                for align in all_aligns(edition(trace_align, word1, word2))
+                if cost_of(align) == result.cost
             ),
         )
 
@@ -380,8 +464,8 @@ if __name__ == "__main__":
             (
                 Record(cost=key, count=value)
                 for key, value in Counter(
-                    cost_of(flatten_align(align))
-                    for align in edition(all_aligns, word1, word2)
+                    cost_of(align)
+                    for align in all_aligns(edition(trace_align, word1, word2))
                 ).items()
             )
         )
@@ -472,8 +556,8 @@ if __name__ == "__main__":
 
     def par_operations_bruteforce(word1: str, word2: str) -> None:
         vecs = set(
-            operations_of(flatten_align(align))
-            for align in edition(all_aligns, word1, word2)
+            operations_of(align)
+            for align in all_aligns(edition(trace_align, word1, word2))
         )
         assert edition(par_operations, word1, word2) == Multiset(
             vec for vec in vecs if not any(operations_lt(other, vec) for other in vecs)
@@ -544,16 +628,12 @@ if __name__ == "__main__":
     )
 
     def par_operations_count_bruteforce(word1: str, word2: str) -> None:
-        res_aligns = edition(all_aligns, word1, word2)
-        vecs = set(operations_of(flatten_align(align)) for align in res_aligns)
+        res_aligns = tuple(all_aligns(edition(trace_align, word1, word2)))
+        vecs = set(operations_of(align) for align in res_aligns)
         assert edition(par_operations_count, word1, word2) == Multiset(
             Record(
                 operations=vec,
-                count=sum(
-                    1
-                    for align in res_aligns
-                    if operations_of(flatten_align(align)) == vec
-                ),
+                count=sum(1 for align in res_aligns if operations_of(align) == vec),
             )
             for vec in vecs
             if not any(operations_lt(other, vec) for other in vecs)
@@ -567,27 +647,35 @@ if __name__ == "__main__":
 
 # Compute the set of alignments having Pareto-optimal operation counts
 par_operations_aligns = (
-    join(operations=operations, solutions=all_aligns) | power() | pareto("operations.*")
+    join(operations=operations, solutions=trace_align)
+    | power()
+    | pareto("operations.*")
 )
 
 if __name__ == "__main__":
     empty_aligns = edition(par_operations_aligns, "", "")
     assert empty_aligns[0].operations == Record(changes=0, deletes=0, inserts=0)
-    assert flatten_aligns(empty_aligns[0].solutions) == Multiset(((),))
+    assert iterables_equal(
+        all_aligns(empty_aligns[0].solutions),
+        ((),),
+    )
 
     ab_bc_aligns = edition(par_operations_aligns, "ab", "bc")
     assert ab_bc_aligns[0].operations == Record(changes=2, deletes=0, inserts=0)
-    assert flatten_aligns(ab_bc_aligns[0].solutions) == Multiset(
-        ((("match", "a", "b"), ("match", "b", "c")),)
+    assert iterables_equal(
+        all_aligns(ab_bc_aligns[0].solutions),
+        ((("match", "a", "b"), ("match", "b", "c")),),
     )
     assert ab_bc_aligns[1].operations == Record(changes=0, deletes=1, inserts=1)
-    assert flatten_aligns(ab_bc_aligns[1].solutions) == Multiset(
-        ((("delete", "a"), ("match", "b", "b"), ("insert", "c")),)
+    assert iterables_equal(
+        all_aligns(ab_bc_aligns[1].solutions),
+        ((("delete", "a"), ("match", "b", "b"), ("insert", "c")),),
     )
 
     abba_abab_aligns = edition(par_operations_aligns, "abba", "abab")
     assert abba_abab_aligns[0].operations == Record(changes=2, deletes=0, inserts=0)
-    assert flatten_aligns(abba_abab_aligns[0].solutions) == Multiset(
+    assert iterables_equal(
+        all_aligns(abba_abab_aligns[0].solutions),
         (
             (
                 ("match", "a", "a"),
@@ -595,10 +683,11 @@ if __name__ == "__main__":
                 ("match", "b", "a"),
                 ("match", "a", "b"),
             ),
-        )
+        ),
     )
     assert abba_abab_aligns[1].operations == Record(changes=0, deletes=1, inserts=1)
-    assert flatten_aligns(abba_abab_aligns[1].solutions) == Multiset(
+    assert iterables_equal(
+        all_aligns(abba_abab_aligns[1].solutions),
         (
             (
                 ("match", "a", "a"),
@@ -621,14 +710,15 @@ if __name__ == "__main__":
                 ("match", "a", "a"),
                 ("insert", "b"),
             ),
-        )
+        ),
     )
 
     alberta_camera_aligns = edition(par_operations_aligns, "alberta", "camera")
     assert alberta_camera_aligns[0].operations == Record(
         changes=3, deletes=1, inserts=0
     )
-    assert flatten_aligns(alberta_camera_aligns[0].solutions) == Multiset(
+    assert iterables_equal(
+        all_aligns(alberta_camera_aligns[0].solutions),
         (
             (
                 ("match", "a", "c"),
@@ -639,12 +729,13 @@ if __name__ == "__main__":
                 ("delete", "t"),
                 ("match", "a", "a"),
             ),
-        )
+        ),
     )
     assert alberta_camera_aligns[1].operations == Record(
         changes=1, deletes=2, inserts=1
     )
-    assert flatten_aligns(alberta_camera_aligns[1].solutions) == Multiset(
+    assert iterables_equal(
+        all_aligns(alberta_camera_aligns[1].solutions),
         (
             (
                 ("insert", "c"),
@@ -666,12 +757,13 @@ if __name__ == "__main__":
                 ("delete", "t"),
                 ("match", "a", "a"),
             ),
-        )
+        ),
     )
     assert alberta_camera_aligns[2].operations == Record(
         changes=0, deletes=3, inserts=2
     )
-    assert flatten_aligns(alberta_camera_aligns[2].solutions) == Multiset(
+    assert iterables_equal(
+        all_aligns(alberta_camera_aligns[2].solutions),
         (
             (
                 ("insert", "c"),
@@ -706,109 +798,23 @@ if __name__ == "__main__":
                 ("delete", "t"),
                 ("match", "a", "a"),
             ),
-        )
+        ),
     )
 
     def par_operations_aligns_bruteforce(word1: str, word2: str) -> None:
-        res_aligns = edition(all_aligns, word1, word2)
-        vecs = set(operations_of(flatten_align(align)) for align in res_aligns)
-        assert edition(par_operations_aligns, word1, word2) == Multiset(
-            Record(
-                operations=vec,
-                solutions=Multiset(
+        result = edition(par_operations_aligns, word1, word2)
+
+        for item in result:
+            assert iterables_equal(
+                all_aligns(item.solutions),
+                (
                     align
-                    for align in res_aligns
-                    if operations_of(flatten_align(align)) == vec
+                    for align in all_aligns(edition(trace_align, word1, word2))
+                    if operations_of(align) == item.operations
                 ),
             )
-            for vec in vecs
-            if not any(operations_lt(other, vec) for other in vecs)
-        )
 
     par_operations_aligns_bruteforce("", "")
     par_operations_aligns_bruteforce("ab", "bc")
     par_operations_aligns_bruteforce("abba", "abab")
     par_operations_aligns_bruteforce("alberta", "camera")
-
-
-# Generate a graph of all candidates, or only of optimal ones
-ed_graph = trace(EditionSignature, single=False)
-min_ed_graph = join(cost=min_cost, graph=ed_graph) | lex("cost")
-
-
-if __name__ == "__main__":
-    assert edition(ed_graph, "", "") == CandidateNode(("unit",))
-
-    graph_ab_bc_21 = CandidateNode(("insert", "b")).add(CandidateNode(("unit",)))
-
-    graph_ab_bc_10 = CandidateNode(("delete", "a")).add(CandidateNode(("unit",)))
-
-    graph_ab_bc_11 = (
-        CandidateNode(("choose",))
-        .add(CandidateNode(("delete", "a")).add(graph_ab_bc_21))
-        .add(CandidateNode(("insert", "b")).add(graph_ab_bc_10))
-        .add(CandidateNode(("match", "a", "b")).add(CandidateNode(("unit",))))
-    )
-
-    assert edition(ed_graph, "ab", "bc") == (
-        CandidateNode(("choose",))
-        .add(
-            CandidateNode(("delete", "b")).add(
-                CandidateNode(("choose",))
-                .add(
-                    CandidateNode(("delete", "a")).add(
-                        CandidateNode(("insert", "c")).add(graph_ab_bc_21)
-                    )
-                )
-                .add(CandidateNode(("insert", "c")).add(graph_ab_bc_11))
-                .add(CandidateNode(("match", "a", "c")).add(graph_ab_bc_21))
-            )
-        )
-        .add(
-            CandidateNode(("insert", "c")).add(
-                CandidateNode(("choose",))
-                .add(CandidateNode(("delete", "b")).add(graph_ab_bc_11))
-                .add(
-                    CandidateNode(("insert", "b")).add(
-                        CandidateNode(("delete", "b")).add(graph_ab_bc_10)
-                    )
-                )
-                .add(CandidateNode(("match", "b", "b")).add(graph_ab_bc_10))
-            )
-        )
-        .add(CandidateNode(("match", "b", "c")).add(graph_ab_bc_11))
-    )
-
-    assert edition(min_ed_graph, "ab", "bc") == Record(
-        cost=2,
-        graph=(
-            CandidateNode(("choose",))
-            .add(
-                CandidateNode(("insert", "c")).add(
-                    CandidateNode(("match", "b", "b")).add(
-                        CandidateNode(("delete", "a")).add(CandidateNode(("unit",)))
-                    )
-                )
-            )
-            .add(
-                CandidateNode(("match", "b", "c")).add(
-                    CandidateNode(("match", "a", "b")).add(CandidateNode(("unit",)))
-                )
-            )
-        ),
-    )
-
-    def enumerate_all_aligns_bruteforce(word1: str, word2: str):
-        assert Multiset(
-            enumerate_candidates(edition(ed_graph, word1, word2))
-        ) == edition(all_aligns, word1, word2)
-
-    enumerate_all_aligns_bruteforce("", "")
-    enumerate_all_aligns_bruteforce("ab", "bc")
-    enumerate_all_aligns_bruteforce("abba", "abab")
-    enumerate_all_aligns_bruteforce("alberta", "camera")
-
-    # For n=15, there are 44,642,381,823 solutions; the following will only finish if
-    # `enumerate_candidates` generates its solutions lazily
-    graph = edition(ed_graph, "a" * 15, "a" * 15)
-    sols = list(islice(enumerate_candidates(graph), 100))

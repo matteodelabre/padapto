@@ -1,34 +1,46 @@
 import dataclasses
 from collections.abc import Iterable
-from dataclasses import Field
+from dataclasses import dataclass
+from functools import partial
 from typing import Any, TypeVar
 
 from sowing import Node, traversal
 
-from .signature import Operator, Signature, make_checked_operator
-
-CandidateNode = Node[tuple[Any, ...], None]
-null_node = CandidateNode(("null",))
-choose_node = CandidateNode(("choose",))
+from .signature import Signature, make_checked_operator
 
 
-def _is_null(node: CandidateNode) -> bool:
-    return node.data == null_node.data
+@dataclass(frozen=True)
+class CircuitData:
+    """Data attached to a node of an algebraic circuit."""
+
+    # Name of the operator associated to the node
+    operator: str
+
+    # List of outdomain arguments for the operator
+    args: tuple[Any, ...] = ()
 
 
-def _is_choose(node: CandidateNode) -> bool:
-    return node.data == choose_node.data
+type Circuit = Node[CircuitData, None]
 
 
-def _children(node: CandidateNode) -> tuple[CandidateNode, ...]:
+def make_circuit_node(*args, **kwargs) -> Circuit:
+    """Create an algebraic circuit node."""
+    return Node(CircuitData(*args, **kwargs))
+
+
+def _is_null(node: Circuit) -> bool:
+    return node.data.operator == "null"
+
+
+def _is_choose(node: Circuit) -> bool:
+    return node.data.operator == "choose"
+
+
+def _children(node: Circuit) -> tuple[Circuit, ...]:
     return tuple(edge.node for edge in node.edges)
 
 
-def _single_choose(left: CandidateNode, right: CandidateNode) -> CandidateNode:
-    return right if _is_null(left) else left
-
-
-def _all_choose(left: CandidateNode, right: CandidateNode) -> CandidateNode:
+def _choose_operator(left: Circuit, right: Circuit) -> Circuit:
     # Flatten nested choice operators and remove nulls
     nodes = tuple(
         child_node
@@ -40,66 +52,62 @@ def _all_choose(left: CandidateNode, right: CandidateNode) -> CandidateNode:
         if not _is_null(child_node)
     )
 
-    # Remove duplicate edges and put them in canonical order
-    nodes = tuple(sorted(set(nodes), key=str))
+    # Remove duplicate edges
+    nodes = tuple(dict.fromkeys(nodes).keys())
 
     if len(nodes) == 0:
-        return null_node
+        return make_circuit_node(operator="null")
     elif len(nodes) == 1:
         return nodes[0]
     else:
-        return choose_node.extend(nodes)
+        return make_circuit_node(operator="choose").extend(nodes)
 
 
-def _trace_operator(field: Field) -> Operator[Any]:
-    def operator(
-        args: tuple[Any, ...],
-        args_types: tuple[type[Any], ...],
-    ) -> CandidateNode:
-        root: CandidateNode = Node((field.name,))
+def _trace_operator(
+    name: str,
+    args: tuple[Any, ...],
+    args_types: tuple[type[Any], ...],
+) -> Circuit:
+    child_args: list[Circuit] = []
+    out_args = []
 
-        for arg_type, arg_value in zip(args_types, args, strict=True):
-            if isinstance(arg_type, TypeVar):
-                # Make null element absorbent in combinations
-                if _is_null(arg_value):
-                    return null_node
+    for arg_type, arg_value in zip(args_types, args, strict=True):
+        if isinstance(arg_type, TypeVar):
+            # Make null element absorbent in combinations
+            if _is_null(arg_value):
+                return arg_value
 
-                root = root.add(arg_value)
-            else:
-                root = root.replace(data=root.data + (arg_value,))
+            child_args.append(arg_value)
+        else:
+            out_args.append(arg_value)
 
-        return root
-
-    return operator
+    return make_circuit_node(operator=name, args=tuple(out_args)).extend(child_args)
 
 
-def trace[S: Signature[Any]](signature: type[S], single=True) -> S:
+def trace[S: Signature[Any]](signature: type[S]) -> S:
     """
-    Derive an algebra that produces candidates from a signature.
+    Derive an algebra that produces algebraic circuits from a signature.
 
     Each call to an algebra operator creates a node which is connected to its arguments,
-    creating a tree of candidates. When :param:`single` is True, a single tree
-    representing the first candidate is produced. When :param:`single` is False, choice
-    nodes are inserted to create a graph which succinctly represents all candidates.
+    creating a circuit of solutions. The resulting circuits may be passed to the
+    :func:`enumerate_solutions` and :func:`get_solution` to retrieve the solutions.
 
-    Note: The return type should be 'S[CandidateNode]'. Unfortunately, Python’s type
+    Note: The return type should be 'S[CircuitData]'. Unfortunately, Python’s type
     system is not powerful enough to express this yet (see
     <https://github.com/python/typing/issues/548>).
 
     :param signature: signature from which to derive the algebra
-    :param single: whether to produce a tree for a single candidate (if True, the
-        default), or to include choice nodes to represent all candidates (if False)
     :returns: created algebra
     """
     elements = {
         field.name: make_checked_operator(
             field.type,
             Node,
-            _trace_operator(field),
+            partial(_trace_operator, field.name),
         )
         for field in dataclasses.fields(signature)
     }
-    elements["choose"] = _single_choose if single else _all_choose
+    elements["choose"] = _choose_operator
     return signature(**elements)
 
 
@@ -129,40 +137,52 @@ def lazyproduct(*args: Iterable[Any]) -> Iterable[tuple]:
                     yield (arg,) + item
 
 
-def enumerate_candidates(root: CandidateNode) -> Iterable[CandidateNode]:
+def enumerate_solutions(root: Circuit) -> Iterable[Circuit]:
     """
-    Enumerate all candidate subtrees from a candidate graph.
+    Enumerate all solutions from a circuit.
 
-    Given a candidate graph, which may be generated by using :func:`trace` with
-    :param:`single` set to False, this function recursively traverses the graph and
-    yields all candidate subtrees.
+    Given a circuit, which may be generated by using :func:`trace`, this function
+    successively yields all the solutions represented by the circuit.
 
-    While the number of candidate subtrees may be exponential in the size of the
-    original graph, this function only needs linear time and memory to go from a
-    candidate to the next.
+    While the number of solutions may be exponential in the size of the original
+    circuit, this function only needs linear time and memory to go from a circuit
+    to the next.
 
     The results are identical to using the powerset of a trace algebra, but it does not
-    require exponential memory as the individual candidates are generated on the fly.
+    require exponential memory as the individual solutions are generated on the fly.
 
-    :param root: root of the candidate graph to traverse
-    :returns: iterator over all candidate subtrees
+    :param root: root of the circuit to traverse
+    :returns: iterator over all solutions
     """
     if _is_null(root):
         return
 
     if _is_choose(root):
         for child in _children(root):
-            yield from enumerate_candidates(child)
+            yield from enumerate_solutions(child)
 
         return
 
     for children in lazyproduct(
-        *(enumerate_candidates(child) for child in _children(root))
+        *(enumerate_solutions(child) for child in _children(root))
     ):
-        yield CandidateNode(root.data).extend(children)
+        yield Node(root.data).extend(children)
 
 
-def graph_to_dot(root: CandidateNode) -> str:
+def get_solution(circuit: Circuit) -> Circuit:
+    """
+    Extract a solution from a circuit.
+
+    Given a circuit, which may be generated by using :func:`trace`, this function
+    retrieves an arbitrary solution represented by the circuit.
+
+    :param circuit: circuit to traverse
+    :returns: solution subcircuit
+    """
+    return next(iter(enumerate_solutions(circuit)))
+
+
+def graph_to_dot(root: Circuit) -> str:
     """Create a representation of a signature call graph in DOT format."""
     # Appearance of choice nodes
     choose_style = {
@@ -182,7 +202,7 @@ def graph_to_dot(root: CandidateNode) -> str:
 
     lines = ["digraph {"]
     escape_rules = str.maketrans({'"': r"\""})
-    ids: dict[CandidateNode, int] = {}
+    ids: dict[Circuit, int] = {}
 
     def visit(node):
         if node not in ids:
@@ -193,7 +213,8 @@ def graph_to_dot(root: CandidateNode) -> str:
         assert source is not None
         visit(source)
 
-        head, *args = source.data
+        head = source.data.operator
+        args = source.data.args
         label = f"{head}({', '.join(map(repr, args))})" if args else head
 
         style = {"label": label}
