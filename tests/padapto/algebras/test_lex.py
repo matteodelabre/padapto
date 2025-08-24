@@ -269,14 +269,6 @@ def test_lex_invalid():
     with pytest.raises(AttributeError, match="'unknown' is not a field of 'left'"):
         join2 | lex("left.unknown")
 
-    revselect = joined | lex("count")
-
-    with pytest.raises(TypeError, match="lex: order for field 'count' is not total"):
-        assert revselect.choose(
-            CostCount(cost=2, count=10),
-            CostCount(cost=3, count=7),
-        ) == CostCount(cost=2, count=10)
-
 
 def test_lex_metadata():
     tropical = SemiRing[int | float](

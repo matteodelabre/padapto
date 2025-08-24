@@ -24,16 +24,13 @@ def _make_lex_choice[T](
         left_le_right = compare(left_value, right_value)
         right_le_left = compare(right_value, left_value)
 
-        if left_le_right and right_le_left:
-            return prev_choose(left, right)
-
-        if left_le_right:
+        if left_le_right and not right_le_left:
             return left
 
-        if right_le_left:
+        if right_le_left and not left_le_right:
             return right
 
-        raise TypeError(f"lex: order for field '{field}' is not total")
+        return prev_choose(left, right)
 
     return choose
 
