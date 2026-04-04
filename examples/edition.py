@@ -5,13 +5,9 @@ from dataclasses import dataclass, replace
 from itertools import islice
 from math import inf
 from typing import Literal
-from sowing.repr import graphviz
 
 from padapto.algebras import (
-    Circuit,
     Signature,
-    enumerate_solutions,
-    get_solution,
     group,
     join,
     lex,
@@ -20,10 +16,7 @@ from padapto.algebras import (
     power,
     trace,
 )
-from padapto.algebras import (
-    make_circuit_node as node,
-)
-from padapto.algebras.trace import circuit_node_style
+from padapto.circuit import make_node, Circuit, enumerate_solutions, get_solution, render
 from padapto.collections import Multiset, Record
 
 
@@ -144,39 +137,39 @@ if __name__ == "__main__":
 trace_align = trace(EditionSignature)
 
 if __name__ == "__main__":
-    choose = node("choose")
-    unit = node("unit")
+    choose = make_node("choose")
+    unit = make_node("unit")
 
     assert edition(trace_align, "", "") == unit
 
-    circ_ab_bc_21 = node("insert", ("b",)).add(unit)
-    circ_ab_bc_10 = node("delete", ("a",)).add(unit)
+    circ_ab_bc_21 = make_node("insert", ("b",)).add(unit)
+    circ_ab_bc_10 = make_node("delete", ("a",)).add(unit)
     circ_ab_bc_11 = (
-        choose.add(node("match", ("a", "b")).add(unit))
-        .add(node("delete", ("a",)).add(circ_ab_bc_21))
-        .add(node("insert", ("b",)).add(circ_ab_bc_10))
+        choose.add(make_node("match", ("a", "b")).add(unit))
+        .add(make_node("delete", ("a",)).add(circ_ab_bc_21))
+        .add(make_node("insert", ("b",)).add(circ_ab_bc_10))
     )
 
     assert edition(trace_align, "ab", "bc") == (
-        choose.add(node("match", ("b", "c")).add(circ_ab_bc_11))
+        choose.add(make_node("match", ("b", "c")).add(circ_ab_bc_11))
         .add(
-            node("delete", ("b",)).add(
-                choose.add(node("match", ("a", "c")).add(circ_ab_bc_21))
+            make_node("delete", ("b",)).add(
+                choose.add(make_node("match", ("a", "c")).add(circ_ab_bc_21))
                 .add(
-                    node("delete", ("a",)).add(
-                        node("insert", ("c",)).add(circ_ab_bc_21)
+                    make_node("delete", ("a",)).add(
+                        make_node("insert", ("c",)).add(circ_ab_bc_21)
                     )
                 )
-                .add(node("insert", ("c",)).add(circ_ab_bc_11))
+                .add(make_node("insert", ("c",)).add(circ_ab_bc_11))
             )
         )
         .add(
-            node("insert", ("c",)).add(
-                choose.add(node("match", ("b", "b")).add(circ_ab_bc_10))
-                .add(node("delete", ("b",)).add(circ_ab_bc_11))
+            make_node("insert", ("c",)).add(
+                choose.add(make_node("match", ("b", "b")).add(circ_ab_bc_10))
+                .add(make_node("delete", ("b",)).add(circ_ab_bc_11))
                 .add(
-                    node("insert", ("b",)).add(
-                        node("delete", ("b",)).add(circ_ab_bc_10)
+                    make_node("insert", ("b",)).add(
+                        make_node("delete", ("b",)).add(circ_ab_bc_10)
                     )
                 )
             )
@@ -184,7 +177,7 @@ if __name__ == "__main__":
     )
 
     assert (
-        graphviz.write(edition(trace_align, "ab", "bc"), node_style=circuit_node_style)
+        render(edition(trace_align, "ab", "bc"))
         == """\
 digraph {
 0 [label="⊕", shape="none", width="0", height="0"]
