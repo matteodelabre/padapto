@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from itertools import islice
 from math import inf
 from typing import Literal
+from sowing.repr import graphviz
 
 from padapto.algebras import (
     Circuit,
@@ -22,6 +23,7 @@ from padapto.algebras import (
 from padapto.algebras import (
     make_circuit_node as node,
 )
+from padapto.algebras.trace import circuit_node_style
 from padapto.collections import Multiset, Record
 
 
@@ -38,7 +40,7 @@ def edition[T](
     word1: Sequence[str],
     word2: Sequence[str],
 ) -> T:
-    table: dict[tuple[int, int], T] = defaultdict(lambda: alg.null())
+    table: dict[tuple[int, int], T] = defaultdict(alg.null)
     n = len(word1)
     m = len(word2)
 
@@ -141,7 +143,6 @@ if __name__ == "__main__":
 # Generate circuits representing the possible alignments
 trace_align = trace(EditionSignature)
 
-
 if __name__ == "__main__":
     choose = node("choose")
     unit = node("unit")
@@ -180,6 +181,63 @@ if __name__ == "__main__":
                 )
             )
         )
+    )
+
+    assert (
+        graphviz.write(edition(trace_align, "ab", "bc"), node_style=circuit_node_style)
+        == """\
+digraph {
+0 [label="⊕", shape="none", width="0", height="0"]
+0 -> 1
+0 -> 2
+0 -> 3
+1 [shape="box", style="rounded", ordering="out", label="match('b', 'c')"]
+1 -> 4
+4 [label="⊕", shape="none", width="0", height="0"]
+4 -> 5
+4 -> 6
+4 -> 7
+5 [shape="box", style="rounded", ordering="out", label="match('a', 'b')"]
+5 -> 8
+8 [shape="box", style="rounded", ordering="out", label="unit"]
+6 [shape="box", style="rounded", ordering="out", label="delete('a')"]
+6 -> 9
+9 [shape="box", style="rounded", ordering="out", label="insert('b')"]
+9 -> 8
+7 [shape="box", style="rounded", ordering="out", label="insert('b')"]
+7 -> 10
+10 [shape="box", style="rounded", ordering="out", label="delete('a')"]
+10 -> 8
+2 [shape="box", style="rounded", ordering="out", label="delete('b')"]
+2 -> 11
+11 [label="⊕", shape="none", width="0", height="0"]
+11 -> 12
+11 -> 13
+11 -> 14
+12 [shape="box", style="rounded", ordering="out", label="match('a', 'c')"]
+12 -> 9
+13 [shape="box", style="rounded", ordering="out", label="delete('a')"]
+13 -> 15
+15 [shape="box", style="rounded", ordering="out", label="insert('c')"]
+15 -> 9
+14 [shape="box", style="rounded", ordering="out", label="insert('c')"]
+14 -> 4
+3 [shape="box", style="rounded", ordering="out", label="insert('c')"]
+3 -> 16
+16 [label="⊕", shape="none", width="0", height="0"]
+16 -> 17
+16 -> 18
+16 -> 19
+17 [shape="box", style="rounded", ordering="out", label="match('b', 'b')"]
+17 -> 10
+18 [shape="box", style="rounded", ordering="out", label="delete('b')"]
+18 -> 4
+19 [shape="box", style="rounded", ordering="out", label="insert('b')"]
+19 -> 20
+20 [shape="box", style="rounded", ordering="out", label="delete('b')"]
+20 -> 10
+}\
+"""
     )
 
 

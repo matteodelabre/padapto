@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any, TypeVar
 
-from sowing import Node, traversal
+from sowing import Node
 
 from .signature import Signature, make_checked_operator
 
@@ -19,6 +19,14 @@ class CircuitData:
     # List of outdomain arguments for the operator
     args: tuple[Any, ...] = ()
 
+    def is_null(self) -> bool:
+        """Test whether this is a null node."""
+        return self.operator == "null"
+
+    def is_choose(self) -> bool:
+        """Test whether this is a choice node."""
+        return self.operator == "choose"
+
 
 type Circuit = Node[CircuitData, None]
 
@@ -26,14 +34,6 @@ type Circuit = Node[CircuitData, None]
 def make_circuit_node(*args, **kwargs) -> Circuit:
     """Create an algebraic circuit node."""
     return Node(CircuitData(*args, **kwargs))
-
-
-def _is_null(node: Circuit) -> bool:
-    return node.data.operator == "null"
-
-
-def _is_choose(node: Circuit) -> bool:
-    return node.data.operator == "choose"
 
 
 def _children(node: Circuit) -> tuple[Circuit, ...]:
@@ -45,11 +45,11 @@ def _choose_operator(left: Circuit, right: Circuit) -> Circuit:
     nodes = tuple(
         child_node
         for child_nodes in (
-            _children(child) if _is_choose(child) else (child,)
+            _children(child) if child.data.is_choose() else (child,)
             for child in (left, right)
         )
         for child_node in child_nodes
-        if not _is_null(child_node)
+        if not child_node.data.is_null()
     )
 
     # Remove duplicate edges
@@ -74,7 +74,7 @@ def _trace_operator(
     for arg_type, arg_value in zip(args_types, args, strict=True):
         if isinstance(arg_type, TypeVar):
             # Make null element absorbent in combinations
-            if _is_null(arg_value):
+            if arg_value.data.is_null():
                 return arg_value
 
             child_args.append(arg_value)
@@ -154,10 +154,10 @@ def enumerate_solutions(root: Circuit) -> Iterable[Circuit]:
     :param root: root of the circuit to traverse
     :returns: iterator over all solutions
     """
-    if _is_null(root):
+    if root.data.is_null():
         return
 
-    if _is_choose(root):
+    if root.data.is_choose():
         for child in _children(root):
             yield from enumerate_solutions(child)
 
@@ -182,52 +182,27 @@ def get_solution(circuit: Circuit) -> Circuit:
     return next(iter(enumerate_solutions(circuit)))
 
 
-def graph_to_dot(root: Circuit) -> str:
-    """Create a representation of a signature call graph in DOT format."""
-    # Appearance of choice nodes
-    choose_style = {
-        "label": "+",
-        "shape": "square",
-        "style": "filled",
-        "fillcolor": "lightgray",
-        "height": "0",
-    }
+def circuit_node_style(data: CircuitData) -> str:
+    """
+    Render circuit nodes as GraphViz nodes.
 
-    # Appearance of all other nodes
-    default_style = {
-        "shape": "box",
-        "style": "rounded",
-        "ordering": "out",  # ensure left-to-right order of outgoing edges is preserved
-    }
-
-    lines = ["digraph {"]
-    escape_rules = str.maketrans({'"': r"\""})
-    ids: dict[Circuit, int] = {}
-
-    def visit(node):
-        if node not in ids:
-            ids[node] = len(ids)
-
-    for cursor in traversal.depth(root, unique=True):
-        source = cursor.node
-        assert source is not None
-        visit(source)
-
-        head = source.data.operator
-        args = source.data.args
+    This style is for use with :func:`sowing.repr.graphviz.write`.
+    """
+    if data.is_choose():
+        return {
+            "label": "⊕",
+            "shape": "none",
+            "width": "0",
+            "height": "0",
+        }
+    else:
+        head = data.operator
+        args = data.args
         label = f"{head}({', '.join(map(repr, args))})" if args else head
 
-        style = {"label": label}
-        style = style | (choose_style if _is_choose(source) else default_style)
-        attrs = ", ".join(
-            f'{key}="{value.translate(escape_rules)}"' for key, value in style.items()
-        )
-        lines.append(f"{ids[source]} [{attrs}]")
-
-        for edge in source.edges:
-            target = edge.node
-            visit(target)
-            lines.append(f"{ids[source]} -> {ids[target]}")
-
-    lines.append("}")
-    return "\n".join(lines)
+        return {
+            "shape": "box",
+            "style": "rounded",
+            "ordering": "out",  # preserve left-to-right order of outgoing edges
+            "label": label,
+        }
