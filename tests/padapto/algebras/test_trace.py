@@ -2,11 +2,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
-from sowing import Node
-
-from padapto.circuit import Circuit, make_node
 from padapto.algebras.signature import Signature
 from padapto.algebras.trace import trace
+from padapto.circuit import Circuit, make_node
 
 from .test_signature import SemiRing
 

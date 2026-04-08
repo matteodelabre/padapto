@@ -1,12 +1,10 @@
 import dataclasses
-from collections.abc import Iterable
-from dataclasses import dataclass
 from functools import partial
 from typing import Any, TypeVar
 
 from sowing import Node
 
-from ..circuit import make_node
+from ..circuit import Circuit, make_node
 from .signature import Signature, make_checked_operator
 
 
