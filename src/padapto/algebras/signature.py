@@ -1,11 +1,10 @@
+import operator
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, fields
 from functools import reduce, wraps
-import operator
 from types import GenericAlias
 from typing import Any, Concatenate, Self, TypeVar, get_args, get_origin
 from weakref import WeakKeyDictionary
-
 
 type Comparator[T] = Callable[[T, T], bool]
 
@@ -77,16 +76,15 @@ class Signature[T]:
         return natural_order_le
 
     @classmethod
-    def count(cls) -> Signature[int]:
+    def count(cls) -> Self:
+        """Create a counting algebra for the current signature."""
         methods = {
             "null": lambda: 0,
             "choose": operator.add,
         }
 
-        for field in fields(cls):
-            signature = get_args(field.type)[0]
-
-            def field_method(*args):
+        def make_counting_method(signature):
+            def method(*args):
                 result = 1
 
                 for kind, value in zip(signature, args, strict=True):
@@ -95,7 +93,12 @@ class Signature[T]:
 
                 return result
 
-            methods[field.name] = field_method
+            return method
+
+        for field in fields(cls):
+            if field.name not in ("null", "choose"):
+                signature = get_args(field.type)[0]
+                methods[field.name] = make_counting_method(signature)
 
         return cls(**methods)
 
