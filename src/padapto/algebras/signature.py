@@ -1,9 +1,13 @@
 from collections.abc import Callable, Mapping, MutableMapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import reduce, wraps
+import operator
 from types import GenericAlias
 from typing import Any, Concatenate, Self, TypeVar, get_args, get_origin
 from weakref import WeakKeyDictionary
+
+
+type Comparator[T] = Callable[[T, T], bool]
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +56,49 @@ class Signature[T]:
         """Use this algebra as the first argument of a pipable function."""
         return fun(self)
 
+    def natural_order(self) -> Comparator[T]:
+        """
+        Create a comparison function using the natural order of this algebra.
+
+        The natural order exists if the choice function is idempotent (i.e., if
+        choice(x, x) = x for any x) and is total if the algebra is conservative
+        (i.e., if choice(x, y) ∈ {x, y} for any x and y).
+
+        When it exists, this order is always monotonous with respect to other algebra
+        functions, i.e., if x ⩽ y, then f(x, z) ⩽ f(y, z) for any x, y and z, for any
+        function f of the algebra and for any argument of f.
+
+        :returns: natural order comparison function
+        """
+
+        def natural_order_le(left: T, right: T) -> bool:
+            return self.choose(left, right) == left
+
+        return natural_order_le
+
+    @classmethod
+    def count(cls) -> Signature[int]:
+        methods = {
+            "null": lambda: 0,
+            "choose": operator.add,
+        }
+
+        for field in fields(cls):
+            signature = get_args(field.type)[0]
+
+            def field_method(*args):
+                result = 1
+
+                for kind, value in zip(signature, args, strict=True):
+                    if isinstance(kind, TypeVar):
+                        result *= value
+
+                return result
+
+            methods[field.name] = field_method
+
+        return cls(**methods)
+
 
 def pipable[F, **P, T](
     func: Callable[Concatenate[F, P], T],
@@ -75,30 +122,6 @@ def pipable[F, **P, T](
         return first_func
 
     return rest_func
-
-
-type Comparator[T] = Callable[[T, T], bool]
-
-
-def make_natural_order[T](algebra: Signature[T]) -> Comparator[T]:
-    """
-    Create a comparison function using the natural order of this algebra.
-
-    The natural order exists if the choice function is idempotent (i.e., if
-    choice(x, x) = x for any x) and is total if the algebra is conservative
-    (i.e., if choice(x, y) ∈ {x, y} for any x and y).
-
-    When it exists, this order is always monotonous with respect to other algebra
-    functions, i.e., if x ⩽ y, then f(x, z) ⩽ f(y, z) for any x, y and z, for any
-    function f of the algebra and for any argument of f.
-
-    :returns: natural order comparison function
-    """
-
-    def natural_order_le(left: T, right: T) -> bool:
-        return algebra.choose(left, right) == left
-
-    return natural_order_le
 
 
 type OperatorWithArgTypes[T] = Callable[[tuple[Any, ...], tuple[type[Any], ...]], T]
@@ -180,7 +203,7 @@ _parent_registry: MutableMapping[Signature[Any], CallTrace] = WeakKeyDictionary(
 
 def trace(transparent: bool = False):
     """
-    Tranform an algebra-producing function to keep a record of its origin.
+    Transform an algebra-producing function to keep a record of its origin.
 
     When an algebra `alg` is produced by the wrapped function, the producing function’s
     name and arguments can be retrieved using the :fun:`get_algebra_parent` function.

@@ -10,7 +10,6 @@ from .signature import (
     Operator,
     Signature,
     extract_algebra_parent,
-    make_natural_order,
     pipable,
     trace,
 )
@@ -78,7 +77,7 @@ def pareto[S: Signature[Multiset[Any]]](algebra: S, *keys: str) -> S:
         raise TypeError("pareto: provided algebra is not a power algebra")
 
     comparators: dict[str, Comparator[Any]] = {
-        field: make_natural_order(subalgebra)
+        field: subalgebra.natural_order()
         for field, subalgebra in get_subalgebras(joined, *keys)
     }
 

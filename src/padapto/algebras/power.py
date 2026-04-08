@@ -14,7 +14,6 @@ from .signature import (
     Operator,
     Signature,
     make_checked_operator,
-    make_natural_order,
     pipable,
     trace,
 )
@@ -152,7 +151,7 @@ def power[S: Signature[Any]](
     :returns: created algebra
     """
     if order is True:
-        compare = make_natural_order(algebra)
+        compare = algebra.natural_order()
     elif order is False:
         compare = None
     else:

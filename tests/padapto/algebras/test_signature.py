@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import inf
 
-from padapto.algebras.signature import Signature, make_natural_order
+from padapto.algebras.signature import Signature
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,7 @@ def test_natural_order() -> None:
         combine=operator.add,
     )
 
-    tropical_le = make_natural_order(tropical)
+    tropical_le = tropical.natural_order()
     assert tropical_le(0, inf)
     assert not tropical_le(inf, 0)
     assert tropical_le(2, 5)
@@ -111,7 +111,7 @@ def test_natural_order() -> None:
         combine=operator.add,
     )
 
-    arctic_le = make_natural_order(arctic)
+    arctic_le = arctic.natural_order()
     assert arctic_le(0, -inf)
     assert not arctic_le(-inf, 0)
     assert arctic_le(5, 2)

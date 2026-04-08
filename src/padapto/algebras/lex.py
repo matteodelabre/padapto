@@ -6,7 +6,6 @@ from .join import get_subalgebras, get_subrecord
 from .signature import (
     Comparator,
     Signature,
-    make_natural_order,
     pipable,
     trace,
 )
@@ -67,7 +66,7 @@ def lex[S: Signature[Any]](algebra: S, *keys: str) -> S:
     choose = algebra.choose
 
     for field, subalgebra in list(get_subalgebras(algebra, *keys))[::-1]:
-        compare = make_natural_order(subalgebra)
+        compare = subalgebra.natural_order()
         choose = _make_lex_choice(choose, field, compare)
 
     return dataclasses.replace(algebra, choose=choose)
