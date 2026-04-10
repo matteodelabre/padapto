@@ -1,6 +1,5 @@
-import operator
 from collections.abc import Callable, Mapping, MutableMapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from functools import reduce, wraps
 from types import GenericAlias
 from typing import Any, Concatenate, Self, TypeVar, get_args, get_origin
@@ -74,33 +73,6 @@ class Signature[T]:
             return self.choose(left, right) == left
 
         return natural_order_le
-
-    @classmethod
-    def count(cls) -> Self:
-        """Create a counting algebra for the current signature."""
-        methods = {
-            "null": lambda: 0,
-            "choose": operator.add,
-        }
-
-        def make_counting_method(signature):
-            def method(*args):
-                result = 1
-
-                for kind, value in zip(signature, args, strict=True):
-                    if isinstance(kind, TypeVar):
-                        result *= value
-
-                return result
-
-            return method
-
-        for field in fields(cls):
-            if field.name not in ("null", "choose"):
-                signature = get_args(field.type)[0]
-                methods[field.name] = make_counting_method(signature)
-
-        return cls(**methods)
 
 
 def pipable[F, **P, T](

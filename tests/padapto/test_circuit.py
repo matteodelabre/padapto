@@ -5,6 +5,7 @@ from itertools import product
 from random import Random
 
 from padapto.algebras.signature import Signature
+from padapto.algebras.counter import counter
 from padapto.circuit import (
     enumerate_solutions,
     eval_inside,
@@ -171,12 +172,12 @@ def _assert_sample_circuit_distrib(circuit, alg, ampl, tol):
 
 def test_circuit_sample_uniform_grid():
     grid = _make_grid(4)
-    _assert_sample_circuit_distrib(grid, GridSignature.count(), ampl=1000, tol=0.1)
+    _assert_sample_circuit_distrib(grid, counter(GridSignature), ampl=1000, tol=0.1)
 
 
 def test_circuit_sample_uniform_paren():
     paren = _make_paren(4)
-    _assert_sample_circuit_distrib(paren, ParenSignature.count(), ampl=1000, tol=0.1)
+    _assert_sample_circuit_distrib(paren, counter(ParenSignature), ampl=1000, tol=0.1)
 
 
 def test_circuit_render():

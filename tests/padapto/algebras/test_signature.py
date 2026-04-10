@@ -117,14 +117,3 @@ def test_natural_order() -> None:
     assert arctic_le(5, 2)
     assert not arctic_le(2, 5)
     assert arctic_le(5, 5)
-
-
-def test_count() -> None:
-    count: SemiRing[int] = SemiRing.count()
-    check_semiring(count, (2, 3, 5), conservative=False)
-
-    assert count.null() == 0
-    assert count.choose(2, 5) == 7
-    assert count.multichoose(8, 3, 1, 9) == 21
-    assert count.unit() == 1
-    assert count.combine(8, 3) == 24
