@@ -1,4 +1,5 @@
-from .cost import add_optimizer as add_optimizer, boltzmann as boltzmann
+from .cost import add_optimizer as add_optimizer
+from .cost import boltzmann as boltzmann
 from .counter import counter as counter
 from .group import group as group
 from .join import join as join

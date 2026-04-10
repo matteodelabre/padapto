@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from itertools import product
 from random import Random
 
-from padapto.algebras.signature import Signature
+from padapto.algebras.cost import add_optimizer, boltzmann
 from padapto.algebras.counter import counter
+from padapto.algebras.signature import Signature
 from padapto.circuit import (
     enumerate_solutions,
+    eval,
     eval_inside,
     get_solution,
     make_node,
@@ -156,28 +158,75 @@ def test_circuit_enumerate_all():
     ]
 
 
-def _assert_sample_circuit_distrib(circuit, alg, ampl, tol):
+def _weighted_sample(circuit, alg, repeats):
     weights = eval_inside(circuit, alg)
-    total = weights[id(circuit)]
-
     gen = Random(42)
     outcomes = Counter()
 
-    for _ in range(total * ampl):
+    for _ in range(repeats):
         outcomes[sample(circuit, gen, weights)] += 1
 
-    assert len(outcomes) == total
-    assert all(ampl * (1 - tol) <= occ <= ampl * (1 + tol) for occ in outcomes.values())
+    return outcomes
 
 
-def test_circuit_sample_uniform_grid():
+def _assert_distrib_uniform(outcomes, sols, tol):
+    mean = outcomes.total() / len(sols)
+    assert all(
+        mean * (1 - tol) <= occ <= mean * (1 + tol)
+        for sol, occ in outcomes.items()
+        if sol in sols
+    )
+
+
+def _assert_distrib_none_out(outcomes, sols, bound):
+    assert all(occ <= bound for sol, occ in outcomes.items() if sol not in sols)
+
+
+def test_circuit_sample_grid_uniform():
     grid = _make_grid(4)
-    _assert_sample_circuit_distrib(grid, counter(GridSignature), ampl=1000, tol=0.1)
+    weighting = counter(GridSignature)
+    sols = set(enumerate_solutions(grid))
+    outcomes = _weighted_sample(grid, weighting, repeats=len(sols) * 1000)
+    _assert_distrib_uniform(outcomes, sols, tol=0.1)
 
 
-def test_circuit_sample_uniform_paren():
+def test_circuit_sample_paren_uniform():
     paren = _make_paren(4)
-    _assert_sample_circuit_distrib(paren, counter(ParenSignature), ampl=1000, tol=0.1)
+    weighting = counter(ParenSignature)
+    sols = set(enumerate_solutions(paren))
+    outcomes = _weighted_sample(paren, weighting, repeats=len(sols) * 1000)
+    _assert_distrib_uniform(outcomes, sols, tol=0.1)
+
+
+def test_circuit_sample_grid_boltzmann():
+    grid = _make_grid(4)
+    operators = {
+        "left": lambda i, j: abs(i - j),
+        "up": lambda i, j: abs(i - j),
+        "diag": lambda i, j: abs(i - j) + 1,
+    }
+    cost_eval = add_optimizer(GridSignature, **operators)
+
+    # Low temperature means uniform sampling among optimal solutions only
+    opt_sols = {sol for sol in enumerate_solutions(grid) if eval(sol, cost_eval) == 3}
+    opt_weighting = boltzmann(GridSignature, temperature=0.1, **operators)
+    opt_outcomes = _weighted_sample(grid, opt_weighting, repeats=len(opt_sols) * 1000)
+    _assert_distrib_uniform(opt_outcomes, opt_sols, tol=0.1)
+    _assert_distrib_none_out(opt_outcomes, opt_sols, bound=10)
+
+    # # High temperature means uniform sampling among all solutions
+    all_sols = set(enumerate_solutions(grid))
+    all_weighting = boltzmann(GridSignature, temperature=100, **operators)
+    all_outcomes = _weighted_sample(grid, all_weighting, repeats=len(all_sols) * 1000)
+    _assert_distrib_uniform(all_outcomes, all_sols, tol=0.1)
+    _assert_distrib_none_out(all_outcomes, all_sols, bound=0)
+
+    # Intermediate temperature means less costly solutions are sampled more often
+    med_weighting = boltzmann(GridSignature, temperature=1, **operators)
+    med_outcomes = _weighted_sample(grid, med_weighting, repeats=len(all_sols) * 1000)
+    med_most_common = [eval(sol, cost_eval) for sol, _ in med_outcomes.most_common()]
+    assert all_sols == set(med_outcomes.keys())
+    assert med_most_common == sorted([eval(sol, cost_eval) for sol in all_sols])
 
 
 def test_circuit_render():
