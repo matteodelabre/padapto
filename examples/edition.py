@@ -7,6 +7,8 @@ from math import inf
 from typing import Literal
 
 from padapto.algebras import (
+    add_optimizer,
+    counter,
     Signature,
     group,
     join,
@@ -16,7 +18,16 @@ from padapto.algebras import (
     power,
     trace,
 )
-from padapto.circuit import make_node, Circuit, enumerate_solutions, get_solution, render
+from padapto.circuit import (
+    Circuit,
+    enumerate_solutions,
+    eval_inside,
+    eval_outside,
+    get_solution,
+    make_node,
+    render,
+    sample,
+)
 from padapto.collections import Multiset, Record
 
 
@@ -60,14 +71,13 @@ def edition[T](
 
 
 # Compute the minimum cost of an alignment, using unit costs
-min_cost = EditionSignature[int | float](
-    null=lambda: inf,
-    choose=min,
-    unit=lambda: 0,
-    match=lambda cost, sym1, sym2: cost + 1 if sym1 != sym2 else cost,
-    delete=lambda cost, sym: cost + 1,
-    insert=lambda cost, sym: cost + 1,
-)
+unit_cost_ops = {
+    "match": lambda sym1, sym2: 1 if sym1 != sym2 else 0,
+    "delete": lambda sym: 1,
+    "insert": lambda sym: 1,
+}
+min_cost: EditionSignature[float] = add_optimizer(EditionSignature, **unit_cost_ops)
+
 
 type Align = tuple[
     tuple[Literal["match"], str, str]
@@ -117,14 +127,7 @@ if __name__ == "__main__":
 # Count the number of possible alignments of two sequences
 # See: Laquer H. Turner, (1981), Asymptotic Limits for a Two-Dimensional Recursion
 # See: OEIS entry A001850
-count = EditionSignature[int](
-    null=lambda: 0,
-    choose=operator.add,
-    unit=lambda: 1,
-    match=lambda count, sym1, sym2: count,
-    delete=lambda count, sym: count,
-    insert=lambda count, sym: count,
-)
+count: EditionSignature[int] = counter(EditionSignature)
 
 if __name__ == "__main__":
     assert edition(count, "", "") == 1
@@ -176,9 +179,7 @@ if __name__ == "__main__":
         )
     )
 
-    assert (
-        render(edition(trace_align, "ab", "bc"))
-        == """\
+    assert render(edition(trace_align, "ab", "bc")) == """\
 digraph {
 0 [label="⊕", shape="none", width="0", height="0"]
 0 -> 1
@@ -231,7 +232,6 @@ digraph {
 20 -> 10
 }\
 """
-    )
 
 
 # Enumerate solutions from the generated circuits
