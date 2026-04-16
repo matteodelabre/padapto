@@ -315,27 +315,51 @@ def test_circuit_outside_sample_paren():
 
 
 def test_circuit_render():
-    assert (
-        render(
-            make_node("combine")
-            .add(make_node("choose").add(make_node("unit1")).add(make_node("unit2")))
-            .add(make_node("choose").add(make_node("unit2")).add(make_node("unit3")))
-        )
-        == """\
+    circuit = (
+        make_node("combine")
+        .add(make_node("choose").add(make_node("unit1")).add(make_node("unit2")))
+        .add(make_node("choose").add(make_node("unit2")).add(make_node("unit3")))
+    )
+
+    assert render(circuit) == """\
 digraph {
-0 [shape="box", style="rounded", ordering="out", label="combine"]
+0 [ordering="out", shape="box", style="rounded", label="combine"]
 0 -> 1
 0 -> 2
 1 [label="⊕", shape="none", width="0", height="0"]
 1 -> 3
 1 -> 4
-3 [shape="box", style="rounded", ordering="out", label="unit1"]
-4 [shape="box", style="rounded", ordering="out", label="unit2"]
+3 [ordering="out", shape="box", style="rounded", label="unit1"]
+4 [ordering="out", shape="box", style="rounded", label="unit2"]
 2 [label="⊕", shape="none", width="0", height="0"]
 2 -> 5
 2 -> 6
-5 [shape="box", style="rounded", ordering="out", label="unit2"]
-6 [shape="box", style="rounded", ordering="out", label="unit3"]
+5 [ordering="out", shape="box", style="rounded", label="unit2"]
+6 [ordering="out", shape="box", style="rounded", label="unit3"]
 }\
 """
-    )
+
+    meta = {
+        id(circuit): 42,
+        id(circuit.unzip().down().node): "abc",
+        id(circuit.unzip().down().down(1).node): 13.37,
+    }
+
+    assert render(circuit, node_metadata=meta) == """\
+digraph {
+0 [ordering="out", shape="Mrecord", label="{ combine | 42 }"]
+0 -> 1
+0 -> 2
+1 [label="⊕
+abc", shape="none", width="0", height="0"]
+1 -> 3
+1 -> 4
+3 [ordering="out", shape="box", style="rounded", label="unit1"]
+4 [ordering="out", shape="Mrecord", label="{ unit2 | 13.37 }"]
+2 [label="⊕", shape="none", width="0", height="0"]
+2 -> 5
+2 -> 6
+5 [ordering="out", shape="box", style="rounded", label="unit2"]
+6 [ordering="out", shape="box", style="rounded", label="unit3"]
+}\
+"""

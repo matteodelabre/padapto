@@ -16,6 +16,7 @@ from numbers import Real
 from random import Random
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
+from immutables import Map
 from sowing import traversal
 from sowing.node import Node
 from sowing.repr import graphviz
@@ -51,42 +52,63 @@ def make_node(*args, **kwargs) -> Circuit:
     return Node(OperatorData(*args, **kwargs))
 
 
-def default_circuit_style(data: OperatorData) -> graphviz.Style:
+def default_circuit_style(data: OperatorData, meta: Any) -> graphviz.Style:
     """Render circuit nodes as GraphViz nodes."""
+    attrs = {}
+
     if data.is_choose():
-        return {
-            "label": "⊕",
-            "shape": "none",
-            "width": "0",
-            "height": "0",
-        }
+        attrs["label"] = "⊕"
+        attrs["shape"] = "none"
+        attrs["width"] = "0"
+        attrs["height"] = "0"
+
+        if meta is not None:
+            attrs["label"] += "\n" + str(meta)
     else:
         head = data.operator
         args = data.args
-        label = f"{head}({', '.join(map(repr, args))})" if args else head
+        op_label = f"{head}({', '.join(map(repr, args))})" if args else head
 
-        return {
-            "shape": "box",
-            "style": "rounded",
-            "ordering": "out",  # preserve left-to-right order of outgoing edges
-            "label": label,
-        }
+        # Preserve left-to-right order of outgoing edges
+        attrs["ordering"] = "out"
+
+        if meta is None:
+            attrs["shape"] = "box"
+            attrs["style"] = "rounded"
+            attrs["label"] = op_label
+        else:
+            attrs["shape"] = "Mrecord"
+            attrs["label"] = f"{{ {op_label} | {meta} }}"
+
+    return attrs
 
 
 def render(
     circuit: Circuit,
-    node_style: Callable[[OperatorData], graphviz.Style] = default_circuit_style,
+    node_style: Callable[[OperatorData, Any], graphviz.Style] = default_circuit_style,
     graph_style: graphviz.Style | None = None,
+    node_metadata: Mapping[int, Any] = Map(),
 ) -> str:
     """
     Represent a circuit in the DOT format.
 
     See :func:`sowing.repr.graphviz.write` for details.
+
+    :param node_style: mapping from each operator data to a dictionary of GraphViz
+        attributes
+    :param graph_style: dictionary of GraphViz attributes for the whole graph
+    :param node_metadata: dictionary of additional metadata to display alongside each
+        node, indexed by the node identifier
     """
     if graph_style is None:
         graph_style = {}
 
-    return graphviz.write(circuit, node_style=node_style, graph_style=graph_style)
+    def wrapped_node_style(node: Circuit) -> graphviz.Style:
+        return node_style(node.data, node_metadata.get(id(node), None))
+
+    return graphviz.write(
+        circuit, node_style=wrapped_node_style, graph_style=graph_style
+    )
 
 
 def lazyproduct(*args: Iterable[Any]) -> Iterable[tuple]:
