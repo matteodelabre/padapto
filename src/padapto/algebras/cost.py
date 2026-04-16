@@ -40,7 +40,8 @@ def add_optimizer(
     :param signature: signature for the algebra
     :param choose: whether to do minimization or maximization
     :param operators: set of operators computing the additive terms
-        and depending only on the outdomain arguments
+        and depending only on the outdomain arguments (default for
+        missing operators: cost of 0)
     """
     elements: dict[str, Operator[Real]] = {}
 

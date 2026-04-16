@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from itertools import product
 from random import Random
 
+from sowing import traversal
+
 from padapto.algebras.cost import add_optimizer, boltzmann
 from padapto.algebras.counter import counter
 from padapto.algebras.signature import Signature
@@ -11,6 +13,7 @@ from padapto.circuit import (
     enumerate_solutions,
     eval,
     eval_inside,
+    eval_outside,
     get_solution,
     make_node,
     render,
@@ -48,7 +51,7 @@ def _make_grid(size):
 
 @dataclass(frozen=True)
 class ParenSignature[T](Signature[T]):
-    unit: Callable[[], T]
+    unit: Callable[[int], T]
     combine: Callable[[T, T, int, int, int], T]
 
 
@@ -58,7 +61,7 @@ def _make_paren(size):
     for s in range(1, size + 1):
         for i in range(size - s + 1):
             if s == 1:
-                cells[i][s] = make_node("unit")
+                cells[i][s] = make_node("unit", (i,))
             else:
                 cells[i][s] = make_node("choose")
 
@@ -73,6 +76,16 @@ def _make_paren(size):
                     cells[i][s] = cells[i][s].edges[0].node
 
     return cells[0][size]
+
+
+def test_paren_non_redundant():
+    paren = _make_paren(9)
+    keys = list(
+        cursor.node.data.args
+        for cursor in traversal.depth(paren, unique="id")
+        if not cursor.node.data.is_choose()
+    )
+    assert len(keys) == len(set(keys))
 
 
 def test_circuit_get_solution():
@@ -105,10 +118,14 @@ def test_circuit_get_solution_paren():
     # in this case is 1 002 242 216 651 368 (29th Catalan number)
     size = 30
     paren = _make_paren(size)
-    res = make_node("unit")
+    res = make_node("unit", (size - 1,))
 
     for i in range(size - 1, 0, -1):
-        res = make_node("combine", (i - 1, i, size)).add(make_node("unit")).add(res)
+        res = (
+            make_node("combine", (i - 1, i, size))
+            .add(make_node("unit", (i - 1,)))
+            .add(res)
+        )
 
     sol = get_solution(paren)
     assert res == sol
@@ -142,31 +159,28 @@ def test_circuit_enumerate_all():
 
     assert list(enumerate_solutions(_make_paren(3))) == [
         make_node("combine", (0, 1, 3))
-        .add(make_node("unit"))
+        .add(make_node("unit", (0,)))
         .add(
             make_node("combine", (1, 2, 3))
-            .add(make_node("unit"))
-            .add(make_node("unit"))
+            .add(make_node("unit", (1,)))
+            .add(make_node("unit", (2,)))
         ),
         make_node("combine", (0, 2, 3))
         .add(
             make_node("combine", (0, 1, 2))
-            .add(make_node("unit"))
-            .add(make_node("unit"))
+            .add(make_node("unit", (0,)))
+            .add(make_node("unit", (1,)))
         )
-        .add(make_node("unit")),
+        .add(make_node("unit", (2,))),
     ]
 
 
 def _weighted_sample(circuit, alg, repeats):
     weights = eval_inside(circuit, alg)
     gen = Random(42)
-    outcomes = Counter()
 
     for _ in range(repeats):
-        outcomes[sample(circuit, gen, weights)] += 1
-
-    return outcomes
+        yield sample(circuit, gen, weights)
 
 
 def _assert_distrib_uniform(outcomes, sols, tol):
@@ -185,17 +199,17 @@ def _assert_distrib_none_out(outcomes, sols, bound):
 def test_circuit_sample_grid_uniform():
     grid = _make_grid(4)
     weighting = counter(GridSignature)
-    sols = set(enumerate_solutions(grid))
-    outcomes = _weighted_sample(grid, weighting, repeats=len(sols) * 1000)
-    _assert_distrib_uniform(outcomes, sols, tol=0.1)
+    all_sols = set(enumerate_solutions(grid))
+    sample_sols = _weighted_sample(grid, weighting, repeats=len(all_sols) * 1000)
+    _assert_distrib_uniform(Counter(sample_sols), all_sols, tol=0.1)
 
 
 def test_circuit_sample_paren_uniform():
     paren = _make_paren(4)
     weighting = counter(ParenSignature)
-    sols = set(enumerate_solutions(paren))
-    outcomes = _weighted_sample(paren, weighting, repeats=len(sols) * 1000)
-    _assert_distrib_uniform(outcomes, sols, tol=0.1)
+    all_sols = set(enumerate_solutions(paren))
+    sample_sols = _weighted_sample(paren, weighting, repeats=len(all_sols) * 1000)
+    _assert_distrib_uniform(Counter(sample_sols), all_sols, tol=0.1)
 
 
 def test_circuit_sample_grid_boltzmann():
@@ -210,23 +224,94 @@ def test_circuit_sample_grid_boltzmann():
     # Low temperature means uniform sampling among optimal solutions only
     opt_sols = {sol for sol in enumerate_solutions(grid) if eval(sol, cost_eval) == 3}
     opt_weighting = boltzmann(GridSignature, temperature=0.1, **operators)
-    opt_outcomes = _weighted_sample(grid, opt_weighting, repeats=len(opt_sols) * 1000)
+    opt_sample = _weighted_sample(grid, opt_weighting, repeats=len(opt_sols) * 1000)
+    opt_outcomes = Counter(opt_sample)
     _assert_distrib_uniform(opt_outcomes, opt_sols, tol=0.1)
     _assert_distrib_none_out(opt_outcomes, opt_sols, bound=10)
 
-    # # High temperature means uniform sampling among all solutions
+    # High temperature means uniform sampling among all solutions
     all_sols = set(enumerate_solutions(grid))
     all_weighting = boltzmann(GridSignature, temperature=100, **operators)
-    all_outcomes = _weighted_sample(grid, all_weighting, repeats=len(all_sols) * 1000)
+    all_sample = _weighted_sample(grid, all_weighting, repeats=len(all_sols) * 1000)
+    all_outcomes = Counter(all_sample)
     _assert_distrib_uniform(all_outcomes, all_sols, tol=0.1)
     _assert_distrib_none_out(all_outcomes, all_sols, bound=0)
 
     # Intermediate temperature means less costly solutions are sampled more often
     med_weighting = boltzmann(GridSignature, temperature=1, **operators)
-    med_outcomes = _weighted_sample(grid, med_weighting, repeats=len(all_sols) * 1000)
+    med_sample = _weighted_sample(grid, med_weighting, repeats=len(all_sols) * 1000)
+    med_outcomes = Counter(med_sample)
     med_most_common = [eval(sol, cost_eval) for sol, _ in med_outcomes.most_common()]
     assert all_sols == set(med_outcomes.keys())
     assert med_most_common == sorted([eval(sol, cost_eval) for sol in all_sols])
+
+
+def test_circuit_outside_count_paren():
+    paren = _make_paren(9)
+    weighting = counter(ParenSignature)
+    inside = eval_inside(paren, weighting)
+    outside = eval_outside(paren, weighting, inside)
+
+    # `inside[node] * outside[node]` should equal the number of solutions
+    # containing a given node
+    expected = {
+        cursor.node.data.args: inside[id(cursor.node)] * outside[id(cursor.node)]
+        for cursor in traversal.depth(paren, unique="id")
+        if not cursor.node.data.is_choose()
+    }
+
+    actual = Counter(
+        cursor.node.data.args
+        for sol in enumerate_solutions(paren)
+        for cursor in traversal.depth(sol)
+        if not cursor.node.data.is_choose()
+    )
+
+    assert expected == actual
+
+
+def _assert_sample_expected_subcounts(circuit, alg, repeats, tol):
+    inside = eval_inside(circuit, alg)
+    outside = eval_outside(circuit, alg, inside)
+    root_val = inside[id(circuit)]
+
+    expected = {
+        cursor.node.data.args: inside[id(cursor.node)]
+        * outside[id(cursor.node)]
+        * repeats
+        / root_val
+        for cursor in traversal.depth(circuit, unique="id")
+        if not cursor.node.data.is_choose()
+    }
+
+    actual = Counter(
+        cursor.node.data.args
+        for sol in _weighted_sample(circuit, alg, repeats=repeats)
+        for cursor in traversal.depth(sol)
+        if not cursor.node.data.is_choose()
+    )
+
+    margin = repeats * tol
+
+    for key in set(expected) | set(actual):
+        assert expected[key] - margin <= actual[key] <= expected[key] + margin
+
+
+def test_circuit_outside_sample_paren():
+    paren = _make_paren(7)
+    operators = {
+        "unit": lambda _: 0,
+        "combine": lambda i, j, k: abs(i - j) + abs(j - k),
+    }
+
+    opt_weighting = boltzmann(ParenSignature, temperature=0.1, **operators)
+    _assert_sample_expected_subcounts(paren, opt_weighting, repeats=10_000, tol=0.01)
+
+    all_weighting = boltzmann(ParenSignature, temperature=100, **operators)
+    _assert_sample_expected_subcounts(paren, all_weighting, repeats=10_000, tol=0.01)
+
+    med_weighting = boltzmann(ParenSignature, temperature=1, **operators)
+    _assert_sample_expected_subcounts(paren, med_weighting, repeats=10_000, tol=0.01)
 
 
 def test_circuit_render():

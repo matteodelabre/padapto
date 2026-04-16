@@ -9,6 +9,7 @@ See also :func:`padapto.algebras.trace` to create circuit-generating algebras fr
 given signature.
 """
 
+from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, fields
 from numbers import Real
@@ -208,33 +209,31 @@ def eval_outside[T](
     circuit: Circuit, alg: Signature[T], inside: dict[int, Real]
 ) -> dict[int, Real]:
     """
-    Evaluate the outside contributions of each node in a circuit.
+    Evaluate the outside weight of each node in a circuit.
 
-    For each circuit node, its outside contribution is the total value of all solutions
+    For each circuit node, its outside weight is the total weight of all solutions
     containing the node when treating this node as if it were a leaf.
 
     :param circuit: circuit describing the circuit to evaluate
-    :param alg: algebra to use for evaluaiton
+    :param alg: weighting algebra used for evaluaiton
     :param inside: inside values as computed by :func:`eval_inside`
     :returns: dictionary associating each node ID to its outside value
     """
-    outside = {}
+    outside = defaultdict(float)
+    outside[id(circuit)] = 1
 
-    for cursor in traversal.depth(circuit, preorder=True, unique="id"):
+    for cursor in traversal.topological(circuit):
         node = cursor.node
+        value = outside[id(node)]
 
-        if cursor.is_root():
-            value = alg.unit()
+        if node.data.is_choose():
+            for child in cursor.children():
+                outside[id(child.node)] += value
         else:
-            parent = cursor.up().node
-            value = outside[id(parent)]
-
-            if not parent.data.is_choose():
-                for sibling in cursor.siblings():
-                    # FIXME: Generalize to other kinds of products?
-                    value *= inside[id(sibling.node)]
-
-        outside[id(node)] = value
+            for child in cursor.children():
+                outside[id(child.node)] += (
+                    value * inside[id(node)] / inside[id(child.node)]
+                )
 
     return outside
 
