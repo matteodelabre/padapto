@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from math import exp, inf
+from typing import cast
 
 from padapto.algebras.cost import add_optimizer, boltzmann
 from padapto.algebras.signature import Signature
@@ -12,11 +13,18 @@ class OutSemiRing[T](Signature[T]):
     combine: Callable[[str, T, str, T], T]
 
 
+def combine_cost(x: str, y: str) -> float:
+    return float(x != y)
+
+
+def combine_value(x: str, y: str) -> float:
+    return float(x == y)
+
+
 def test_cost_min() -> None:
-    min_cost: OutSemiRing[float] = add_optimizer(
-        OutSemiRing,
-        choose=min,
-        combine=lambda x, y: x != y,
+    min_cost = cast(
+        OutSemiRing[float],
+        add_optimizer(OutSemiRing, choose="min", combine=combine_cost),
     )
 
     assert min_cost.null() == inf
@@ -28,10 +36,13 @@ def test_cost_min() -> None:
 
 
 def test_cost_max() -> None:
-    max_value: OutSemiRing[float] = add_optimizer(
-        OutSemiRing,
-        choose=max,
-        combine=lambda x, y: x == y,
+    max_value = cast(
+        OutSemiRing[float],
+        add_optimizer(
+            OutSemiRing,
+            choose="max",
+            combine=combine_value,
+        ),
     )
 
     assert max_value.null() == -inf
@@ -43,10 +54,13 @@ def test_cost_max() -> None:
 
 
 def test_cost_boltzmann() -> None:
-    boltz: OutSemiRing[float] = boltzmann(
-        OutSemiRing,
-        temperature=2,
-        combine=lambda x, y: x != y,
+    boltz = cast(
+        OutSemiRing[float],
+        boltzmann(
+            OutSemiRing,
+            temperature=2,
+            combine=combine_cost,
+        ),
     )
 
     assert boltz.null() == 0

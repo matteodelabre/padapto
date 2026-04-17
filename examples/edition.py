@@ -1,15 +1,13 @@
-import operator
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from itertools import islice
-from math import inf
 from typing import Literal
 
 from padapto.algebras import (
+    Signature,
     add_optimizer,
     counter,
-    Signature,
     group,
     join,
     lex,
@@ -21,12 +19,9 @@ from padapto.algebras import (
 from padapto.circuit import (
     Circuit,
     enumerate_solutions,
-    eval_inside,
-    eval_outside,
     get_solution,
     make_node,
     render,
-    sample,
 )
 from padapto.collections import Multiset, Record
 

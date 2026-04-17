@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import cast
 
 from padapto.algebras.counter import counter
 from padapto.algebras.signature import Signature
@@ -12,7 +13,7 @@ class OutSemiRing[T](Signature[T]):
 
 
 def test_counter() -> None:
-    out_counter: OutSemiRing[int] = counter(OutSemiRing)
+    out_counter = cast(OutSemiRing[int], counter(OutSemiRing))
 
     assert out_counter.null() == 0
     assert out_counter.choose(3, 7) == 10

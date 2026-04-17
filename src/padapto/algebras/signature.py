@@ -105,7 +105,7 @@ type Operator[T] = Callable[[*tuple[Any, ...]], T]
 
 def make_checked_operator[T](
     operator_signature: Any,
-    dest_type: type[Any],
+    dest_type: Any,
     operator: OperatorWithArgTypes[T],
 ) -> Operator[T]:
     """Wrap an operator to check that its arguments respect a signature on each call."""

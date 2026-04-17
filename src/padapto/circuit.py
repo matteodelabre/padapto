@@ -12,7 +12,6 @@ given signature.
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, fields
-from numbers import Real
 from random import Random
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
@@ -32,8 +31,8 @@ class OperatorData:
     # Name of the operator associated to the node
     operator: str
 
-    # List of outdomain arguments for the operator with their argument index
-    args: tuple[tuple[int, Any], ...] = ()
+    # List of outdomain arguments for the operator
+    args: tuple[Any, ...] = ()
 
     def is_null(self) -> bool:
         """Test whether this is a null node."""
@@ -187,12 +186,13 @@ def eval_inside[T](circuit: Circuit, alg: Signature[T]) -> dict[int, T]:
     for field in fields(alg):
         signatures[field.name] = get_args(field.type)[0]
 
-    inside = {}
+    inside: dict[int, T] = {}
 
     for cursor in traversal.depth(circuit, preorder=False, unique="id"):
         node = cursor.node
-        op_data = node.data
+        assert node is not None
 
+        op_data = node.data
         children_values = [inside[id(child)] for child in node.children()]
 
         if op_data.is_choose():
@@ -200,16 +200,16 @@ def eval_inside[T](circuit: Circuit, alg: Signature[T]) -> dict[int, T]:
         else:
             # Collect and reorder children arguments and outdomain arguments
             signature = signatures[op_data.operator]
-            args = [None] * len(signature)
+            args = []
             next_child = 0
             next_outdomain = 0
 
-            for i, kind in enumerate(signature):
+            for kind in signature:
                 if isinstance(kind, TypeVar):
-                    args[i] = children_values[next_child]
+                    args.append(children_values[next_child])
                     next_child += 1
                 else:
-                    args[i] = op_data.args[next_outdomain]
+                    args.append(op_data.args[next_outdomain])
                     next_outdomain += 1
 
             if len(children_values) != next_child:
@@ -227,9 +227,9 @@ def eval_inside[T](circuit: Circuit, alg: Signature[T]) -> dict[int, T]:
     return inside
 
 
-def eval_outside[T](
-    circuit: Circuit, alg: Signature[T], inside: dict[int, Real]
-) -> dict[int, Real]:
+def eval_outside(
+    circuit: Circuit, alg: Signature[float], inside: dict[int, float]
+) -> dict[int, float]:
     """
     Evaluate the outside weight of each node in a circuit.
 
@@ -241,11 +241,13 @@ def eval_outside[T](
     :param inside: inside values as computed by :func:`eval_inside`
     :returns: dictionary associating each node ID to its outside value
     """
-    outside = defaultdict(float)
+    outside: dict[int, float] = defaultdict(float)
     outside[id(circuit)] = 1
 
     for cursor in traversal.topological(circuit):
         node = cursor.node
+        assert node is not None
+
         value = outside[id(node)]
 
         if node.data.is_choose():
@@ -273,7 +275,7 @@ def eval[T](circuit: Circuit, alg: Signature[T]) -> T:
 
 
 def sample(
-    root: Circuit, gen: Random, weights: Signature[Real] | Mapping[int, Real]
+    root: Circuit, gen: Random, weights: Signature[float] | Mapping[int, float]
 ) -> Circuit:
     """
     Randomly sample solutions from a circuit according to a specified weighting.
@@ -295,4 +297,6 @@ def sample(
         index = gen.choices(range(len(children)), children_weights)[0]
         return sample(children[index], gen, weights)
     else:
-        return Node(root.data).extend(sample(child, gen, weights) for child in children)
+        return Node[OperatorData, None](root.data).extend(
+            sample(child, gen, weights) for child in children
+        )

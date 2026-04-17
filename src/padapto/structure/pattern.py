@@ -33,7 +33,7 @@ def chain[T](
     if not patterns:
         return head
 
-    return replace(head, rest=chain(*patterns))
+    return replace(head, rest=chain(*patterns))  # type: ignore[type-var]
 
 
 def merge[Key, Value](
