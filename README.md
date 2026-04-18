@@ -5,8 +5,7 @@ A full documentation will appear later; for now, please refer to the [examples](
 
 ## Roadmap
 
-- Allow defining algorithms using grammars and grammar products
 - Add more examples (parsing, reconciliation, problems on sets, folding, matrix multiplication, ...)
-- Tests for computing outside values
 - Write documentation
+- Investigate grammar products
 - Investigate optimizations that inline algebra functions through AST transformations
