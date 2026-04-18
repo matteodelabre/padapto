@@ -3,7 +3,7 @@ import operator
 from collections.abc import Callable
 from functools import partial
 from math import exp, inf
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal
 
 from .signature import Operator, Signature, make_checked_operator
 
@@ -13,17 +13,16 @@ def _cost_operator[V](
     in_operator: Callable[[V, V], V],
     out_operator: Operator[V],
     out_to_in: Callable[[V], V],
-    args: tuple[Any, ...],
-    args_types: tuple[type[Any], ...],
+    args: tuple[tuple[Any, bool], ...],
 ):
     result = unit
     outdomain = []
 
-    for arg_type, arg_value in zip(args_types, args, strict=True):
-        if isinstance(arg_type, TypeVar):
-            result = in_operator(result, arg_value)
+    for arg, arg_is_out in args:
+        if arg_is_out:
+            outdomain.append(arg)
         else:
-            outdomain.append(arg_value)
+            result = in_operator(result, arg)
 
     return in_operator(result, out_to_in(out_operator(*outdomain)))
 

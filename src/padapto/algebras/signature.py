@@ -99,7 +99,7 @@ def pipable[F, **P, T](
     return rest_func
 
 
-type OperatorWithArgTypes[T] = Callable[[tuple[Any, ...], tuple[type[Any], ...]], T]
+type OperatorWithArgTypes[T] = Callable[[tuple[tuple[Any, bool], ...]], T]
 type Operator[T] = Callable[[*tuple[Any, ...]], T]
 
 
@@ -135,39 +135,41 @@ def make_checked_operator[T](
 
     def checked_operator(*args: Any) -> T:
         # When called, check that the given arguments respect the operator signature
-        if __debug__:
-            if variadic is not None:
-                req_args = len(args_types) - 1
+        arg_is_out = [True] * len(args)
 
-                if len(args) < req_args:
-                    raise TypeError(
-                        f"expected at least {req_args} arguments, got {len(args)}"
-                    )
+        if variadic is not None:
+            req_args = len(args_types) - 1
 
-                loc_args_types = args_types[:-1] + (variadic,) * (len(args) - req_args)
-            else:
-                if len(args) != len(args_types):
-                    raise TypeError(
-                        f"expected {len(args_types)} arguments, got {len(args)}"
-                    )
+            if len(args) < req_args:
+                raise TypeError(
+                    f"expected at least {req_args} arguments, got {len(args)}"
+                )
 
-                loc_args_types = args_types
+            loc_args_types = args_types[:-1] + (variadic,) * (len(args) - req_args)
+        else:
+            if len(args) != len(args_types):
+                raise TypeError(
+                    f"expected {len(args_types)} arguments, got {len(args)}"
+                )
 
-            for i, (arg_type, arg_value) in enumerate(
-                zip(loc_args_types, args, strict=True)
-            ):
-                if isinstance(arg_type, TypeVar):
+            loc_args_types = args_types
+
+        for i, (arg_type, arg_value) in enumerate(
+            zip(loc_args_types, args, strict=True)
+        ):
+            if isinstance(arg_type, TypeVar):
+                if arg_type == return_type:
+                    arg_is_out[i] = False
+
                     if not isinstance(arg_value, dest_type):
                         raise TypeError(
                             f"argument #{i} must be of type '{dest_type.__name__}'"
                         )
-                elif not isinstance(arg_value, arg_type):
-                    raise TypeError(
-                        f"argument #{i} must be of type '{arg_type.__name__}'"
-                    )
+            elif not isinstance(arg_value, arg_type):
+                raise TypeError(f"argument #{i} must be of type '{arg_type.__name__}'")
 
         # Forward to the original operator, with computed type information
-        return operator(args, loc_args_types)
+        return operator(tuple(zip(args, arg_is_out, strict=True)))
 
     return checked_operator
 

@@ -1,6 +1,6 @@
 import dataclasses
 from functools import partial
-from typing import Any, TypeVar
+from typing import Any
 
 from sowing import Node
 
@@ -33,21 +33,20 @@ def _choose_operator(left: Circuit, right: Circuit) -> Circuit:
 
 def _trace_operator(
     name: str,
-    args: tuple[Any, ...],
-    args_types: tuple[type[Any], ...],
+    args: tuple[tuple[Any, bool], ...],
 ) -> Circuit:
     child_args: list[Circuit] = []
     out_args = []
 
-    for arg_type, arg_value in zip(args_types, args, strict=True):
-        if isinstance(arg_type, TypeVar):
-            # Make null element absorbent in combinations
-            if arg_value.data.is_null():
-                return arg_value
-
-            child_args.append(arg_value)
+    for arg, arg_is_out in args:
+        if arg_is_out:
+            out_args.append(arg)
         else:
-            out_args.append(arg_value)
+            # Make null element absorbent in combinations
+            if arg.data.is_null():
+                return arg
+
+            child_args.append(arg)
 
     return make_node(operator=name, args=tuple(out_args)).extend(child_args)
 

@@ -3,7 +3,7 @@ import itertools
 import operator
 from collections.abc import Callable
 from functools import partial, total_ordering
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparison
@@ -96,16 +96,12 @@ def _power_operator[T, U](
     operator: Operator[T],
     compare: Comparator[T] | None,
     unique: bool,
-    args: tuple[Any, ...],
-    args_types: tuple[type[Any], ...],
+    args: tuple[tuple[Any, bool], ...],
 ) -> Multiset[T]:
     result = [
         operator(*call)
         for call in itertools.product(
-            *(
-                arg_value if isinstance(arg_type, TypeVar) else (arg_value,)
-                for arg_type, arg_value in zip(args_types, args, strict=True)
-            )
+            *((arg,) if arg_is_out else arg for arg, arg_is_out in args)
         )
     ]
 

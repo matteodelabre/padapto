@@ -1,19 +1,16 @@
 import dataclasses
 import operator
-from typing import Any, TypeVar
+from typing import Any
 
 from .signature import Operator, Signature, make_checked_operator
 
 
-def _counter_operator(
-    args: tuple[Any, ...],
-    args_types: tuple[type[Any], ...],
-) -> int:
+def _counter_operator(args: tuple[tuple[Any, bool], ...]) -> int:
     result = 1
 
-    for arg_type, arg_value in zip(args_types, args, strict=True):
-        if isinstance(arg_type, TypeVar):
-            result *= arg_value
+    for arg, arg_is_out in args:
+        if not arg_is_out:
+            result *= arg
 
     return result
 

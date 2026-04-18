@@ -1,7 +1,7 @@
 import dataclasses
 from collections.abc import Iterator, Mapping
 from functools import partial
-from typing import Any, TypeVar
+from typing import Any
 
 from ..collections import Record
 from .signature import (
@@ -16,21 +16,13 @@ from .signature import (
 def _joined_operator[T](
     record_type: type[T],
     suboperators: Mapping[str, Operator[Any]],
-    args: tuple[Any, ...],
-    args_types: tuple[type[Any], ...],
+    args: tuple[tuple[Any, bool], ...],
 ) -> T:
     return record_type(
         **{
             # Compute the value for each field using the respective subalgebra
             key: suboperator(
-                *(
-                    (
-                        getattr(arg_value, key)
-                        if isinstance(arg_type, TypeVar)
-                        else arg_value
-                    )
-                    for arg_type, arg_value in zip(args_types, args, strict=True)
-                )
+                *(arg if arg_is_out else getattr(arg, key) for arg, arg_is_out in args)
             )
             for key, suboperator in suboperators.items()
         }
