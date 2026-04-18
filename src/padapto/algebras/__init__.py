@@ -7,5 +7,6 @@ from .lex import lex as lex
 from .limit import limit as limit
 from .pareto import pareto as pareto
 from .power import power as power
+from .signature import Operator as Operator
 from .signature import Signature as Signature
 from .trace import trace as trace

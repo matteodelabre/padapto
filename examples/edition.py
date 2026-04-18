@@ -1,12 +1,16 @@
-from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Sequence
+import time
+from collections import Counter
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from itertools import islice
-from typing import Literal
+from random import Random
+from typing import Literal, cast
 
 from padapto.algebras import (
+    Operator,
     Signature,
     add_optimizer,
+    boltzmann,
     counter,
     group,
     join,
@@ -22,56 +26,92 @@ from padapto.circuit import (
     get_solution,
     make_node,
     render,
+    sample,
 )
 from padapto.collections import Multiset, Record
+from padapto.structure import (
+    Empty,
+    Grammar,
+    Item,
+    Subseq,
+    Var,
+    chain,
+    clause,
+    grammar,
+    predicate,
+)
+
+from .gettotalsize import gettotalsize
 
 
 @dataclass(frozen=True)
-class EditionSignature[T](Signature[T]):
+class AlignSignature[T](Signature[T]):
     unit: Callable[[], T]
     match: Callable[[T, str, str], T]
     delete: Callable[[T, str], T]
     insert: Callable[[T, str], T]
 
 
-def edition[T](
-    alg: EditionSignature[T],
-    word1: Sequence[str],
-    word2: Sequence[str],
-) -> T:
-    table: dict[tuple[int, int], T] = defaultdict(alg.null)
-    n = len(word1)
-    m = len(word2)
+@grammar
+class AlignGrammar[T](Grammar[T]):
+    alg: AlignSignature[T]
 
-    for i in range(n + 1):
-        for j in range(m + 1):
-            if i == 0 and j == 0:
-                table[(0, 0)] = alg.unit()
-                continue
+    @predicate
+    @staticmethod
+    def align(left: str, right: str) -> T:
+        return  # type: ignore
 
-            change = delete = insert = alg.null()
+    @clause(left=Empty(), right=Empty())
+    def _empty(self):
+        return self.alg.unit()
 
-            if i >= 1 and j >= 1:
-                change = alg.match(table[(i - 1, j - 1)], word1[i - 1], word2[j - 1])
+    @clause(
+        left=chain(Item(Var("left_char")), Subseq(Var("left"))),
+        right=chain(Item(Var("right_char")), Subseq(Var("right"))),
+    )
+    def _match(self, left_char: str, right_char: str, left: str, right: str) -> T:
+        return self.alg.match(self.align(left=left, right=right), left_char, right_char)
 
-            if i >= 1:
-                delete = alg.delete(table[(i - 1, j)], word1[i - 1])
+    @clause(
+        left=chain(Item(Var("left_char")), Subseq(Var("left"))),
+        right=Var("right"),
+    )
+    def _delete(self, left_char: str, left: str, right: str) -> T:
+        return self.alg.delete(self.align(left=left, right=right), left_char)
 
-            if j >= 1:
-                insert = alg.insert(table[(i, j - 1)], word2[j - 1])
-
-            table[(i, j)] = alg.multichoose(change, delete, insert)
-
-    return table[(n, m)]
+    @clause(
+        left=Var("left"),
+        right=chain(Item(Var("right_char")), Subseq(Var("right"))),
+    )
+    def _insert(self, right_char: str, left: str, right: str) -> T:
+        return self.alg.insert(self.align(left=left, right=right), right_char)
 
 
 # Compute the minimum cost of an alignment, using unit costs
-unit_cost_ops = {
-    "match": lambda sym1, sym2: 1 if sym1 != sym2 else 0,
-    "delete": lambda sym: 1,
-    "insert": lambda sym: 1,
+def _unit_cost_match(sym1: str, sym2: str) -> int:
+    return 1 if sym1 != sym2 else 0
+
+
+def _unit_cost_delete(sym: str) -> int:
+    return 1
+
+
+def _unit_cost_insert(sym: str) -> int:
+    return 1
+
+
+unit_cost_ops: dict[str, Operator[float]] = {
+    "match": _unit_cost_match,
+    "delete": _unit_cost_delete,
+    "insert": _unit_cost_insert,
 }
-min_cost: EditionSignature[float] = add_optimizer(EditionSignature, **unit_cost_ops)
+min_cost: AlignSignature[float] = add_optimizer(
+    AlignSignature, choose="min", **unit_cost_ops
+)
+boltz_distr: AlignSignature[float] = boltzmann(
+    AlignSignature, temperature=1, **unit_cost_ops
+)
+gr_min_cost = AlignGrammar(min_cost).align
 
 
 type Align = tuple[
@@ -89,10 +129,10 @@ def cost_of(align: Align) -> int:
 
 
 if __name__ == "__main__":
-    assert edition(min_cost, "", "") == 0
-    assert edition(min_cost, "ab", "bc") == 2
-    assert edition(min_cost, "abba", "abab") == 2
-    assert edition(min_cost, "alberta", "camera") == 4
+    assert gr_min_cost(left="", right="") == 0
+    assert gr_min_cost(left="ab", right="bc") == 2
+    assert gr_min_cost(left="abba", right="abab") == 2
+    assert gr_min_cost(left="alberta", right="camera") == 4
 
     assert cost_of((("match", "a", "a"), ("match", "b", "b"))) == 0
     assert cost_of((("match", "a", "a"), ("match", "b", "c"))) == 1
@@ -102,43 +142,47 @@ if __name__ == "__main__":
 
 # Compute the cost of all alignments, in increasing order
 all_min_costs = min_cost | power(order=True)
+gr_all_min_costs = AlignGrammar(all_min_costs).align
 
 if __name__ == "__main__":
-    assert edition(all_min_costs, "", "") == Multiset((0,))
-    assert edition(all_min_costs, "ab", "bc") == Multiset(
+    assert gr_all_min_costs(left="", right="") == Multiset((0,))
+    assert gr_all_min_costs(left="ab", right="bc") == Multiset(
         (2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4)
     )
-    # assert edition(all_min_costs, "abba", "abab") == <... 321 results ...>
-    # assert edition(all_min_costs, "alberta", "camera") == <... 19825 results ...>
+    # assert gr_all_min_costs(left="abba", right="abab") == <... 321 results ...>
+    # assert gr_all_min_costs(left="alberta", right="camera") == <... 19825 results ...>
 
 
 # Compute the cost of the 5 best alignments
 five_best_costs = min_cost | power(order=True) | limit(5)
+gr_five_best_costs = AlignGrammar(five_best_costs).align
 
 if __name__ == "__main__":
-    assert edition(five_best_costs, "ab", "bc") == Multiset((2, 2, 3, 3, 3))
+    assert gr_five_best_costs(left="ab", right="bc") == Multiset((2, 2, 3, 3, 3))
 
 
 # Count the number of possible alignments of two sequences
 # See: Laquer H. Turner, (1981), Asymptotic Limits for a Two-Dimensional Recursion
 # See: OEIS entry A001850
-count: EditionSignature[int] = counter(EditionSignature)
+count: AlignSignature[int] = counter(AlignSignature)
+gr_count = AlignGrammar(count).align
 
 if __name__ == "__main__":
-    assert edition(count, "", "") == 1
-    assert edition(count, "ab", "bc") == 13
-    assert edition(count, "abba", "abab") == 321
-    assert edition(count, "alberta", "camera") == 19825
+    assert gr_count(left="", right="") == 1
+    assert gr_count(left="ab", right="bc") == 13
+    assert gr_count(left="abba", right="abab") == 321
+    assert gr_count(left="alberta", right="camera") == 19825
 
 
 # Generate circuits representing the possible alignments
-trace_align = trace(EditionSignature)
+tracer = trace(AlignSignature)
+gr_tracer = AlignGrammar(tracer).align
 
 if __name__ == "__main__":
     choose = make_node("choose")
     unit = make_node("unit")
 
-    assert edition(trace_align, "", "") == unit
+    assert gr_tracer(left="", right="") == unit
 
     circ_ab_bc_21 = make_node("insert", ("b",)).add(unit)
     circ_ab_bc_10 = make_node("delete", ("a",)).add(unit)
@@ -148,7 +192,7 @@ if __name__ == "__main__":
         .add(make_node("insert", ("b",)).add(circ_ab_bc_10))
     )
 
-    assert edition(trace_align, "ab", "bc") == (
+    assert gr_tracer(left="ba", right="cb") == (
         choose.add(make_node("match", ("b", "c")).add(circ_ab_bc_11))
         .add(
             make_node("delete", ("b",)).add(
@@ -174,56 +218,56 @@ if __name__ == "__main__":
         )
     )
 
-    assert render(edition(trace_align, "ab", "bc")) == """\
+    assert render(gr_tracer(left="ba", right="cb")) == """\
 digraph {
 0 [label="⊕", shape="none", width="0", height="0"]
 0 -> 1
 0 -> 2
 0 -> 3
-1 [shape="box", style="rounded", ordering="out", label="match('b', 'c')"]
+1 [ordering="out", shape="box", style="rounded", label="match('b', 'c')"]
 1 -> 4
 4 [label="⊕", shape="none", width="0", height="0"]
 4 -> 5
 4 -> 6
 4 -> 7
-5 [shape="box", style="rounded", ordering="out", label="match('a', 'b')"]
+5 [ordering="out", shape="box", style="rounded", label="match('a', 'b')"]
 5 -> 8
-8 [shape="box", style="rounded", ordering="out", label="unit"]
-6 [shape="box", style="rounded", ordering="out", label="delete('a')"]
+8 [ordering="out", shape="box", style="rounded", label="unit"]
+6 [ordering="out", shape="box", style="rounded", label="delete('a')"]
 6 -> 9
-9 [shape="box", style="rounded", ordering="out", label="insert('b')"]
+9 [ordering="out", shape="box", style="rounded", label="insert('b')"]
 9 -> 8
-7 [shape="box", style="rounded", ordering="out", label="insert('b')"]
+7 [ordering="out", shape="box", style="rounded", label="insert('b')"]
 7 -> 10
-10 [shape="box", style="rounded", ordering="out", label="delete('a')"]
+10 [ordering="out", shape="box", style="rounded", label="delete('a')"]
 10 -> 8
-2 [shape="box", style="rounded", ordering="out", label="delete('b')"]
+2 [ordering="out", shape="box", style="rounded", label="delete('b')"]
 2 -> 11
 11 [label="⊕", shape="none", width="0", height="0"]
 11 -> 12
 11 -> 13
 11 -> 14
-12 [shape="box", style="rounded", ordering="out", label="match('a', 'c')"]
+12 [ordering="out", shape="box", style="rounded", label="match('a', 'c')"]
 12 -> 9
-13 [shape="box", style="rounded", ordering="out", label="delete('a')"]
+13 [ordering="out", shape="box", style="rounded", label="delete('a')"]
 13 -> 15
-15 [shape="box", style="rounded", ordering="out", label="insert('c')"]
+15 [ordering="out", shape="box", style="rounded", label="insert('c')"]
 15 -> 9
-14 [shape="box", style="rounded", ordering="out", label="insert('c')"]
+14 [ordering="out", shape="box", style="rounded", label="insert('c')"]
 14 -> 4
-3 [shape="box", style="rounded", ordering="out", label="insert('c')"]
+3 [ordering="out", shape="box", style="rounded", label="insert('c')"]
 3 -> 16
 16 [label="⊕", shape="none", width="0", height="0"]
 16 -> 17
 16 -> 18
 16 -> 19
-17 [shape="box", style="rounded", ordering="out", label="match('b', 'b')"]
+17 [ordering="out", shape="box", style="rounded", label="match('b', 'b')"]
 17 -> 10
-18 [shape="box", style="rounded", ordering="out", label="delete('b')"]
+18 [ordering="out", shape="box", style="rounded", label="delete('b')"]
 18 -> 4
-19 [shape="box", style="rounded", ordering="out", label="insert('b')"]
+19 [ordering="out", shape="box", style="rounded", label="insert('b')"]
 19 -> 20
-20 [shape="box", style="rounded", ordering="out", label="delete('b')"]
+20 [ordering="out", shape="box", style="rounded", label="delete('b')"]
 20 -> 10
 }\
 """
@@ -235,7 +279,7 @@ def flatten_align(solution: Circuit) -> Align:
         return ()
 
     operation = (solution.data.operator, *solution.data.args)
-    return flatten_align(solution.edges[0].node) + (operation,)
+    return (operation,) + flatten_align(solution.edges[0].node)
 
 
 def one_align(circuit: Circuit) -> Align:
@@ -260,36 +304,36 @@ def iterables_equal[T](left: Iterable[T], right: Iterable[T]) -> bool:
 
 
 if __name__ == "__main__":
-    assert one_align(edition(trace_align, "", "")) == ()
+    assert one_align(gr_tracer(left="", right="")) == ()
     assert iterables_equal(
-        all_aligns(edition(trace_align, "", "")),
+        all_aligns(gr_tracer(left="", right="")),
         ((),),
     )
 
-    assert one_align(edition(trace_align, "ab", "bc")) == (
+    assert one_align(gr_tracer(left="ab", right="bc")) == (
         ("match", "a", "b"),
         ("match", "b", "c"),
     )
     assert iterables_equal(
-        all_aligns(edition(trace_align, "ab", "bc")),
+        all_aligns(gr_tracer(left="ab", right="bc")),
         (
             (("match", "a", "b"), ("match", "b", "c")),
-            (("insert", "b"), ("delete", "a"), ("match", "b", "c")),
-            (("delete", "a"), ("insert", "b"), ("match", "b", "c")),
-            (("insert", "b"), ("match", "a", "c"), ("delete", "b")),
-            (("insert", "b"), ("insert", "c"), ("delete", "a"), ("delete", "b")),
-            (("match", "a", "b"), ("insert", "c"), ("delete", "b")),
-            (("insert", "b"), ("delete", "a"), ("insert", "c"), ("delete", "b")),
-            (("delete", "a"), ("insert", "b"), ("insert", "c"), ("delete", "b")),
-            (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
             (("match", "a", "b"), ("delete", "b"), ("insert", "c")),
-            (("insert", "b"), ("delete", "a"), ("delete", "b"), ("insert", "c")),
-            (("delete", "a"), ("insert", "b"), ("delete", "b"), ("insert", "c")),
+            (("match", "a", "b"), ("insert", "c"), ("delete", "b")),
+            (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
             (("delete", "a"), ("delete", "b"), ("insert", "b"), ("insert", "c")),
+            (("delete", "a"), ("insert", "b"), ("match", "b", "c")),
+            (("delete", "a"), ("insert", "b"), ("delete", "b"), ("insert", "c")),
+            (("delete", "a"), ("insert", "b"), ("insert", "c"), ("delete", "b")),
+            (("insert", "b"), ("match", "a", "c"), ("delete", "b")),
+            (("insert", "b"), ("delete", "a"), ("match", "b", "c")),
+            (("insert", "b"), ("delete", "a"), ("delete", "b"), ("insert", "c")),
+            (("insert", "b"), ("delete", "a"), ("insert", "c"), ("delete", "b")),
+            (("insert", "b"), ("insert", "c"), ("delete", "a"), ("delete", "b")),
         ),
     )
 
-    assert one_align(edition(trace_align, "abba", "abab")) == (
+    assert one_align(gr_tracer(left="abba", right="abab")) == (
         ("match", "a", "a"),
         ("match", "b", "b"),
         ("match", "b", "a"),
@@ -297,20 +341,20 @@ if __name__ == "__main__":
     )
     # Retrieving all aligns on this example would yield 321 results
 
-    assert one_align(edition(trace_align, "alberta", "camera")) == (
+    assert one_align(gr_tracer(left="alberta", right="camera")) == (
+        ("match", "a", "c"),
+        ("match", "l", "a"),
+        ("match", "b", "m"),
+        ("match", "e", "e"),
+        ("match", "r", "r"),
+        ("match", "t", "a"),
         ("delete", "a"),
-        ("match", "l", "c"),
-        ("match", "b", "a"),
-        ("match", "e", "m"),
-        ("match", "r", "e"),
-        ("match", "t", "r"),
-        ("match", "a", "a"),
     )
     # Retrieving all aligns on this example would yield 19825 results
 
     def all_aligns_bruteforce(word1: str, word2: str) -> None:
-        total = sum(1 for _ in all_aligns(edition(trace_align, word1, word2)))
-        assert total == edition(count, word1, word2)
+        total = sum(1 for _ in all_aligns(gr_tracer(left=word1, right=word2)))
+        assert total == gr_count(left=word1, right=word2)
 
     all_aligns_bruteforce("", "")
     all_aligns_bruteforce("ab", "bc")
@@ -319,34 +363,44 @@ if __name__ == "__main__":
 
     # For n=15, there are 44,642,381,823 solutions; the following will only finish if
     # `enumerate_candidates` generates its solutions lazily
-    circuit = edition(trace_align, "a" * 15, "a" * 15)
+    circuit = gr_tracer(left="a" * 15, right="a" * 15)
     sols = list(islice(enumerate_solutions(circuit), 100))
 
     # Check that the minimum cost value is correct
-    assert edition(min_cost, "abba", "abab") == min(
-        cost_of(align) for align in all_aligns(edition(trace_align, "abba", "abab"))
+    assert gr_min_cost(left="abba", right="abab") == min(
+        cost_of(align) for align in all_aligns(gr_tracer(left="abba", right="abab"))
     )
-    assert edition(all_min_costs, "abba", "abab") == Multiset(
-        cost_of(align) for align in all_aligns(edition(trace_align, "abba", "abab"))
+    assert gr_all_min_costs(left="abba", right="abab") == Multiset(
+        cost_of(align) for align in all_aligns(gr_tracer(left="abba", right="abab"))
     )
+
+    # Sample a solution from a Boltzmann distribution
+    gen = Random(42)
+    circ = gr_tracer(left="alberta", right="camera")
+    min_cost_circ = 2 * gr_min_cost(left="alberta", right="camera")
+
+    sampled_boltz_sol = sample(circ, gen, boltz_distr)
+    assert sampled_boltz_sol in enumerate_solutions(circ)
+    assert cost_of(flatten_align(sampled_boltz_sol)) <= min_cost_circ
 
 
 # Compute the number of alignments of minimum cost
 min_cost_count = join(cost=min_cost, count=count) | lex("cost")
+gr_min_cost_count = AlignGrammar(min_cost_count).align
 
 if __name__ == "__main__":
-    assert edition(min_cost_count, "", "") == Record(cost=0, count=1)
-    assert edition(min_cost_count, "ab", "bc") == Record(cost=2, count=2)
-    assert edition(min_cost_count, "abba", "abab") == Record(cost=2, count=4)
-    assert edition(min_cost_count, "alberta", "camera") == Record(cost=4, count=3)
+    assert gr_min_cost_count(left="", right="") == Record(cost=0, count=1)
+    assert gr_min_cost_count(left="ab", right="bc") == Record(cost=2, count=2)
+    assert gr_min_cost_count(left="abba", right="abab") == Record(cost=2, count=4)
+    assert gr_min_cost_count(left="alberta", right="camera") == Record(cost=4, count=3)
 
     def min_cost_count_bruteforce(word1: str, word2: str) -> None:
-        res_min_cost = edition(min_cost, word1, word2)
-        assert edition(min_cost_count, word1, word2) == Record(
+        res_min_cost = gr_min_cost(left=word1, right=word2)
+        assert gr_min_cost_count(left=word1, right=word2) == Record(
             cost=res_min_cost,
             count=sum(
                 1
-                for align in all_aligns(edition(trace_align, word1, word2))
+                for align in all_aligns(gr_tracer(left=word1, right=word2))
                 if cost_of(align) == res_min_cost
             ),
         )
@@ -358,33 +412,41 @@ if __name__ == "__main__":
 
 
 # Compute the set of alignments of minimum cost
-min_cost_aligns = join(cost=min_cost, solutions=trace_align) | lex("cost")
+min_cost_aligns = join(cost=min_cost, solutions=tracer) | lex("cost")
+gr_min_cost_aligns = AlignGrammar(min_cost_aligns).align
 
 if __name__ == "__main__":
-    assert edition(min_cost_aligns, "", "").cost == 0
+    assert gr_min_cost_aligns(left="", right="").cost == 0
     assert iterables_equal(
-        all_aligns(edition(min_cost_aligns, "", "").solutions),
+        all_aligns(gr_min_cost_aligns(left="", right="").solutions),
         ((),),
     )
 
-    assert edition(min_cost_aligns, "ab", "bc").cost == 2
+    assert gr_min_cost_aligns(left="ab", right="bc").cost == 2
     assert iterables_equal(
-        all_aligns(edition(min_cost_aligns, "ab", "bc").solutions),
+        all_aligns(gr_min_cost_aligns(left="ab", right="bc").solutions),
         (
             (("match", "a", "b"), ("match", "b", "c")),
             (("delete", "a"), ("match", "b", "b"), ("insert", "c")),
         ),
     )
 
-    assert edition(min_cost_aligns, "abba", "abab").cost == 2
+    assert gr_min_cost_aligns(left="abba", right="abab").cost == 2
     assert iterables_equal(
-        all_aligns(edition(min_cost_aligns, "abba", "abab").solutions),
+        all_aligns(gr_min_cost_aligns(left="abba", right="abab").solutions),
         (
             (
                 ("match", "a", "a"),
                 ("match", "b", "b"),
                 ("match", "b", "a"),
                 ("match", "a", "b"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
+                ("delete", "b"),
+                ("match", "a", "a"),
+                ("insert", "b"),
             ),
             (
                 ("match", "a", "a"),
@@ -400,33 +462,16 @@ if __name__ == "__main__":
                 ("match", "a", "a"),
                 ("insert", "b"),
             ),
-            (
-                ("match", "a", "a"),
-                ("match", "b", "b"),
-                ("delete", "b"),
-                ("match", "a", "a"),
-                ("insert", "b"),
-            ),
         ),
     )
 
-    assert edition(min_cost_aligns, "alberta", "camera").cost == 4
+    assert gr_min_cost_aligns(left="alberta", right="camera").cost == 4
     assert iterables_equal(
-        all_aligns(edition(min_cost_aligns, "alberta", "camera").solutions),
+        all_aligns(gr_min_cost_aligns(left="alberta", right="camera").solutions),
         (
             (
                 ("match", "a", "c"),
                 ("match", "l", "a"),
-                ("match", "b", "m"),
-                ("match", "e", "e"),
-                ("match", "r", "r"),
-                ("delete", "t"),
-                ("match", "a", "a"),
-            ),
-            (
-                ("insert", "c"),
-                ("match", "a", "a"),
-                ("delete", "l"),
                 ("match", "b", "m"),
                 ("match", "e", "e"),
                 ("match", "r", "r"),
@@ -443,17 +488,27 @@ if __name__ == "__main__":
                 ("delete", "t"),
                 ("match", "a", "a"),
             ),
+            (
+                ("insert", "c"),
+                ("match", "a", "a"),
+                ("delete", "l"),
+                ("match", "b", "m"),
+                ("match", "e", "e"),
+                ("match", "r", "r"),
+                ("delete", "t"),
+                ("match", "a", "a"),
+            ),
         ),
     )
 
     def min_cost_aligns_bruteforce(word1: str, word2: str) -> None:
-        result = edition(min_cost_aligns, word1, word2)
-        assert result.cost == edition(min_cost, word1, word2)
+        result = gr_min_cost_aligns(left=word1, right=word2)
+        assert result.cost == gr_min_cost(left=word1, right=word2)
         assert iterables_equal(
             all_aligns(result.solutions),
             (
                 align
-                for align in all_aligns(edition(trace_align, word1, word2))
+                for align in all_aligns(gr_tracer(left=word1, right=word2))
                 if cost_of(align) == result.cost
             ),
         )
@@ -463,14 +518,21 @@ if __name__ == "__main__":
     min_cost_aligns_bruteforce("abba", "abab")
     min_cost_aligns_bruteforce("alberta", "camera")
 
+    # Randomly sample among optimal solutions
+    gen = Random(42)
+    circ = gr_min_cost_aligns(left="alberta", right="camera").solutions
+    sampled_min_sol = sample(circ, gen, cast(AlignSignature[float], count))
+    assert sampled_min_sol in enumerate_solutions(circ)
+
 
 # Compute the number of alignments of each cost
 all_costs_count = join(cost=min_cost, count=count) | power() | group("cost")
+gr_all_costs_count = AlignGrammar(all_costs_count).align
 
 if __name__ == "__main__":
-    assert edition(all_costs_count, "", "") == Multiset((Record(cost=0, count=1),))
+    assert gr_all_costs_count(left="", right="") == Multiset((Record(cost=0, count=1),))
 
-    assert edition(all_costs_count, "ab", "bc") == Multiset(
+    assert gr_all_costs_count(left="ab", right="bc") == Multiset(
         (
             Record(cost=2, count=2),
             Record(cost=3, count=5),
@@ -478,7 +540,7 @@ if __name__ == "__main__":
         )
     )
 
-    assert edition(all_costs_count, "abba", "abab") == Multiset(
+    assert gr_all_costs_count(left="abba", right="abab") == Multiset(
         (
             Record(cost=2, count=4),
             Record(cost=3, count=7),
@@ -490,7 +552,7 @@ if __name__ == "__main__":
         )
     )
 
-    assert edition(all_costs_count, "alberta", "camera") == Multiset(
+    assert gr_all_costs_count(left="alberta", right="camera") == Multiset(
         (
             Record(cost=4, count=3),
             Record(cost=5, count=20),
@@ -506,12 +568,12 @@ if __name__ == "__main__":
     )
 
     def all_costs_count_bruteforce(word1: str, word2: str) -> None:
-        assert edition(all_costs_count, word1, word2) == Multiset(
+        assert gr_all_costs_count(left=word1, right=word2) == Multiset(
             (
                 Record(cost=key, count=value)
                 for key, value in Counter(
                     cost_of(align)
-                    for align in all_aligns(edition(trace_align, word1, word2))
+                    for align in all_aligns(gr_tracer(left=word1, right=word2))
                 ).items()
             )
         )
@@ -543,27 +605,28 @@ min_insert = replace(
 )
 operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
 par_operations = operations | power() | pareto("*")
+gr_par_operations = AlignGrammar(par_operations).align
 
 if __name__ == "__main__":
-    assert edition(par_operations, "", "") == Multiset(
+    assert gr_par_operations(left="", right="") == Multiset(
         (Record(changes=0, deletes=0, inserts=0),)
     )
 
-    assert edition(par_operations, "ab", "bc") == Multiset(
+    assert gr_par_operations(left="ab", right="bc") == Multiset(
         (
             Record(changes=2, deletes=0, inserts=0),
             Record(changes=0, deletes=1, inserts=1),
         )
     )
 
-    assert edition(par_operations, "abba", "abab") == Multiset(
+    assert gr_par_operations(left="abba", right="abab") == Multiset(
         (
             Record(changes=2, deletes=0, inserts=0),
             Record(changes=0, deletes=1, inserts=1),
         )
     )
 
-    assert edition(par_operations, "alberta", "camera") == Multiset(
+    assert gr_par_operations(left="alberta", right="camera") == Multiset(
         (
             Record(changes=3, deletes=1, inserts=0),
             Record(changes=1, deletes=2, inserts=1),
@@ -603,9 +666,9 @@ if __name__ == "__main__":
     def par_operations_bruteforce(word1: str, word2: str) -> None:
         vecs = set(
             operations_of(align)
-            for align in all_aligns(edition(trace_align, word1, word2))
+            for align in all_aligns(gr_tracer(left=word1, right=word2))
         )
-        assert edition(par_operations, word1, word2) == Multiset(
+        assert gr_par_operations(left=word1, right=word2) == Multiset(
             vec for vec in vecs if not any(operations_lt(other, vec) for other in vecs)
         )
 
@@ -619,9 +682,10 @@ if __name__ == "__main__":
 par_operations_count = (
     join(operations=operations, count=count) | power() | pareto("operations.*")
 )
+gr_par_operations_count = AlignGrammar(par_operations_count).align
 
 if __name__ == "__main__":
-    assert edition(par_operations_count, "", "") == Multiset(
+    assert gr_par_operations_count(left="", right="") == Multiset(
         (
             Record(
                 operations=Record(changes=0, deletes=0, inserts=0),
@@ -630,7 +694,7 @@ if __name__ == "__main__":
         )
     )
 
-    assert edition(par_operations_count, "ab", "bc") == Multiset(
+    assert gr_par_operations_count(left="ab", right="bc") == Multiset(
         (
             Record(
                 operations=Record(changes=2, deletes=0, inserts=0),
@@ -643,7 +707,7 @@ if __name__ == "__main__":
         )
     )
 
-    assert edition(par_operations_count, "abba", "abab") == Multiset(
+    assert gr_par_operations_count(left="abba", right="abab") == Multiset(
         (
             Record(
                 operations=Record(changes=2, deletes=0, inserts=0),
@@ -656,7 +720,7 @@ if __name__ == "__main__":
         )
     )
 
-    assert edition(par_operations_count, "alberta", "camera") == Multiset(
+    assert gr_par_operations_count(left="alberta", right="camera") == Multiset(
         (
             Record(
                 operations=Record(changes=3, deletes=1, inserts=0),
@@ -674,9 +738,9 @@ if __name__ == "__main__":
     )
 
     def par_operations_count_bruteforce(word1: str, word2: str) -> None:
-        res_aligns = tuple(all_aligns(edition(trace_align, word1, word2)))
+        res_aligns = tuple(all_aligns(gr_tracer(left=word1, right=word2)))
         vecs = set(operations_of(align) for align in res_aligns)
-        assert edition(par_operations_count, word1, word2) == Multiset(
+        assert gr_par_operations_count(left=word1, right=word2) == Multiset(
             Record(
                 operations=vec,
                 count=sum(1 for align in res_aligns if operations_of(align) == vec),
@@ -693,20 +757,19 @@ if __name__ == "__main__":
 
 # Compute the set of alignments having Pareto-optimal operation counts
 par_operations_aligns = (
-    join(operations=operations, solutions=trace_align)
-    | power()
-    | pareto("operations.*")
+    join(operations=operations, solutions=tracer) | power() | pareto("operations.*")
 )
+gr_par_operations_aligns = AlignGrammar(par_operations_aligns).align
 
 if __name__ == "__main__":
-    empty_aligns = edition(par_operations_aligns, "", "")
+    empty_aligns = gr_par_operations_aligns(left="", right="")
     assert empty_aligns[0].operations == Record(changes=0, deletes=0, inserts=0)
     assert iterables_equal(
         all_aligns(empty_aligns[0].solutions),
         ((),),
     )
 
-    ab_bc_aligns = edition(par_operations_aligns, "ab", "bc")
+    ab_bc_aligns = gr_par_operations_aligns(left="ab", right="bc")
     assert ab_bc_aligns[0].operations == Record(changes=2, deletes=0, inserts=0)
     assert iterables_equal(
         all_aligns(ab_bc_aligns[0].solutions),
@@ -718,7 +781,7 @@ if __name__ == "__main__":
         ((("delete", "a"), ("match", "b", "b"), ("insert", "c")),),
     )
 
-    abba_abab_aligns = edition(par_operations_aligns, "abba", "abab")
+    abba_abab_aligns = gr_par_operations_aligns(left="abba", right="abab")
     assert abba_abab_aligns[0].operations == Record(changes=2, deletes=0, inserts=0)
     assert iterables_equal(
         all_aligns(abba_abab_aligns[0].solutions),
@@ -738,6 +801,13 @@ if __name__ == "__main__":
             (
                 ("match", "a", "a"),
                 ("match", "b", "b"),
+                ("delete", "b"),
+                ("match", "a", "a"),
+                ("insert", "b"),
+            ),
+            (
+                ("match", "a", "a"),
+                ("match", "b", "b"),
                 ("insert", "a"),
                 ("match", "b", "b"),
                 ("delete", "a"),
@@ -749,17 +819,10 @@ if __name__ == "__main__":
                 ("match", "a", "a"),
                 ("insert", "b"),
             ),
-            (
-                ("match", "a", "a"),
-                ("match", "b", "b"),
-                ("delete", "b"),
-                ("match", "a", "a"),
-                ("insert", "b"),
-            ),
         ),
     )
 
-    alberta_camera_aligns = edition(par_operations_aligns, "alberta", "camera")
+    alberta_camera_aligns = gr_par_operations_aligns(left="alberta", right="camera")
     assert alberta_camera_aligns[0].operations == Record(
         changes=3, deletes=1, inserts=0
     )
@@ -786,8 +849,8 @@ if __name__ == "__main__":
             (
                 ("insert", "c"),
                 ("match", "a", "a"),
-                ("delete", "l"),
-                ("match", "b", "m"),
+                ("match", "l", "m"),
+                ("delete", "b"),
                 ("match", "e", "e"),
                 ("match", "r", "r"),
                 ("delete", "t"),
@@ -796,8 +859,8 @@ if __name__ == "__main__":
             (
                 ("insert", "c"),
                 ("match", "a", "a"),
-                ("match", "l", "m"),
-                ("delete", "b"),
+                ("delete", "l"),
+                ("match", "b", "m"),
                 ("match", "e", "e"),
                 ("match", "r", "r"),
                 ("delete", "t"),
@@ -814,9 +877,9 @@ if __name__ == "__main__":
             (
                 ("insert", "c"),
                 ("match", "a", "a"),
-                ("insert", "m"),
                 ("delete", "l"),
                 ("delete", "b"),
+                ("insert", "m"),
                 ("match", "e", "e"),
                 ("match", "r", "r"),
                 ("delete", "t"),
@@ -836,9 +899,9 @@ if __name__ == "__main__":
             (
                 ("insert", "c"),
                 ("match", "a", "a"),
+                ("insert", "m"),
                 ("delete", "l"),
                 ("delete", "b"),
-                ("insert", "m"),
                 ("match", "e", "e"),
                 ("match", "r", "r"),
                 ("delete", "t"),
@@ -848,14 +911,14 @@ if __name__ == "__main__":
     )
 
     def par_operations_aligns_bruteforce(word1: str, word2: str) -> None:
-        result = edition(par_operations_aligns, word1, word2)
+        result = gr_par_operations_aligns(left=word1, right=word2)
 
         for item in result:
             assert iterables_equal(
                 all_aligns(item.solutions),
                 (
                     align
-                    for align in all_aligns(edition(trace_align, word1, word2))
+                    for align in all_aligns(gr_tracer(left=word1, right=word2))
                     if operations_of(align) == item.operations
                 ),
             )
@@ -864,3 +927,24 @@ if __name__ == "__main__":
     par_operations_aligns_bruteforce("ab", "bc")
     par_operations_aligns_bruteforce("abba", "abab")
     par_operations_aligns_bruteforce("alberta", "camera")
+
+
+# Performance test
+if __name__ == "__main__":
+    print("Running performance test")
+    print('"n","Memory (kB)","Time (ms)"')
+
+    for n in range(1, 101):
+        data = {"left": "a" * n, "right": "a" * n}
+        gr_perf_test = AlignGrammar(min_cost)
+
+        start = time.perf_counter_ns()
+        res = gr_perf_test.align(**data)
+        end = time.perf_counter_ns()
+
+        print(
+            n,
+            gettotalsize(gr_perf_test) // 1_000,
+            (end - start) // 1_000_000,
+            sep=",",
+        )
