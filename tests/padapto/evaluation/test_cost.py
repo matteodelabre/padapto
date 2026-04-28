@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from math import exp, inf
 from typing import cast
 
-from padapto.evaluation.cost import add_optimizer, boltzmann
+from padapto.evaluation.cost import additive, boltzmann
 from padapto.signature import Signature
 
 
@@ -24,7 +24,7 @@ def combine_value(x: str, y: str) -> float:
 def test_cost_min() -> None:
     min_cost = cast(
         OutSemiRing[float],
-        add_optimizer(OutSemiRing, choose="min", combine=combine_cost),
+        additive(OutSemiRing, choose="min", combine=combine_cost),
     )
 
     assert min_cost.null() == inf
@@ -38,7 +38,7 @@ def test_cost_min() -> None:
 def test_cost_max() -> None:
     max_value = cast(
         OutSemiRing[float],
-        add_optimizer(
+        additive(
             OutSemiRing,
             choose="max",
             combine=combine_value,

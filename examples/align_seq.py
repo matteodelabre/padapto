@@ -18,7 +18,7 @@ from padapto.circuit import (
 from padapto.collections import Multiset, Record
 from padapto.evaluation import (
     Operator,
-    add_optimizer,
+    additive,
     boltzmann,
     count,
     group,
@@ -104,7 +104,7 @@ unit_cost_ops: dict[str, Operator[float]] = {
     "delete": _unit_cost_delete,
     "insert": _unit_cost_insert,
 }
-min_cost: AlignSignature[float] = add_optimizer(
+min_cost: AlignSignature[float] = additive(
     AlignSignature, choose="min", **unit_cost_ops
 )
 boltz_distr: AlignSignature[float] = boltzmann(
@@ -584,9 +584,9 @@ if __name__ == "__main__":
 
 
 # Compute the Pareto-optimal number of operations of each type
-min_change = add_optimizer(AlignSignature, choose="min", match=_unit_cost_match)
-min_delete = add_optimizer(AlignSignature, choose="min", delete=_unit_cost_delete)
-min_insert = add_optimizer(AlignSignature, choose="min", insert=_unit_cost_insert)
+min_change = additive(AlignSignature, choose="min", match=_unit_cost_match)
+min_delete = additive(AlignSignature, choose="min", delete=_unit_cost_delete)
+min_insert = additive(AlignSignature, choose="min", insert=_unit_cost_insert)
 operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
 par_operations = operations | power() | pareto("*")
 gr_par_operations = AlignGrammar(par_operations).align

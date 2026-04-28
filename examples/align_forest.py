@@ -7,7 +7,7 @@ from sowing import Hedge, Node
 from sowing.repr.newick import parse
 
 from padapto.circuit import Circuit, sample
-from padapto.evaluation import add_optimizer, boltzmann, count, trace
+from padapto.evaluation import additive, boltzmann, count, trace
 from padapto.signature import Signature
 from padapto.structure import (
     Empty,
@@ -162,7 +162,7 @@ def _unit_cost_insert(sym: str) -> int:
     return 1
 
 
-align_min_cost = add_optimizer(
+align_min_cost = additive(
     ForestSignature,
     choose="min",
     match=_unit_cost_match,

@@ -1,4 +1,4 @@
-from .cost import add_optimizer as add_optimizer
+from .cost import additive as additive
 from .cost import boltzmann as boltzmann
 from .count import count as count
 from .group import group as group

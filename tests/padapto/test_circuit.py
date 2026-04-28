@@ -20,7 +20,7 @@ from padapto.circuit import (
     serialize,
     unserialize,
 )
-from padapto.evaluation.cost import add_optimizer, boltzmann
+from padapto.evaluation.cost import additive, boltzmann
 from padapto.evaluation.count import count
 from padapto.signature import Signature
 
@@ -223,7 +223,7 @@ def test_circuit_sample_grid_boltzmann():
         "up": lambda i, j: abs(i - j),
         "diag": lambda i, j: abs(i - j) + 1,
     }
-    cost_eval = add_optimizer(GridSignature, **operators)
+    cost_eval = additive(GridSignature, **operators)
 
     # Low temperature means uniform sampling among optimal solutions only
     opt_sols = {sol for sol in enumerate_solutions(grid) if eval(sol, cost_eval) == 3}

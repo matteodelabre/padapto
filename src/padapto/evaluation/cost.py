@@ -28,7 +28,7 @@ def _cost_operator[V](
     return in_operator(result, out_to_in(out_operator(*outdomain)))
 
 
-def add_optimizer[S: Signature[Any]](
+def additive[S: Signature[Any]](
     signature: type[S],
     choose: Literal["min", "max"] = "min",
     **operators: Operator[float],
