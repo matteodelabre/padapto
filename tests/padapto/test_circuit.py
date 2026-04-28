@@ -1,3 +1,5 @@
+import dataclasses
+import json
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,6 +20,8 @@ from padapto.circuit import (
     make_node,
     render,
     sample,
+    serialize,
+    unserialize,
 )
 
 
@@ -363,3 +367,47 @@ abc", shape="none", width="0", height="0"]
 6 [ordering="out", shape="box", style="rounded", label="unit3"]
 }\
 """
+
+
+def test_circuit_encode() -> None:
+    original = _make_paren(4)
+    encoded = json.dumps(serialize(original))
+    decoded = unserialize(json.loads(encoded))
+    assert decoded == original
+
+    original_nodes = sum(1 for _ in traversal.depth(original, unique="id"))
+    decoded_nodes = sum(1 for _ in traversal.depth(decoded, unique="id"))
+    assert original_nodes == decoded_nodes
+
+    @dataclass(frozen=True)
+    class ExampleArgA:
+        x: str
+        y: str
+
+    @dataclass(frozen=True)
+    class ExampleArgB:
+        x: str
+        y: str
+
+    def example_arg_encoder(arg):
+        return {
+            **dataclasses.asdict(arg),
+            "kind": arg.__class__.__name__,
+        }
+
+    def example_arg_decoder(arg):
+        kind = arg.pop("kind", None)
+
+        match kind:
+            case "ExampleArgA":
+                return ExampleArgA(**arg)
+
+            case "ExampleArgB":
+                return ExampleArgB(**arg)
+
+        raise ValueError(f"unknown kind: {kind}")
+
+    original = make_node("x", (ExampleArgA("a", "b"), ExampleArgB("c", "d")))
+    encoded = json.dumps(serialize(original, example_arg_encoder))
+    decoded = unserialize(json.loads(encoded), example_arg_decoder)
+    assert decoded == original

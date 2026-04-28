@@ -16,8 +16,7 @@ from random import Random
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 from immutables import Map
-from sowing import traversal
-from sowing.node import Node
+from sowing import Edge, Node, traversal
 from sowing.repr import graphviz
 
 if TYPE_CHECKING:
@@ -49,6 +48,106 @@ type Circuit = Node[OperatorData, None]
 def make_node(*args, **kwargs) -> Circuit:
     """Create an algebraic circuit node."""
     return Node(OperatorData(*args, **kwargs))
+
+
+def _passthrough[T](value: T) -> T:
+    return value
+
+
+def serialize(
+    circuit: Circuit, arg_encoder: Callable = _passthrough
+) -> Mapping[str, Any]:
+    """
+    Encode an algebraic circuit as a flat and plain JSON structure.
+
+    :param circuit: circuit to be encoded
+    :param arg_encoder: function transforming each argument into a plain JSON value
+        (default: identity function)
+    :returns: encoded object, to use in :func:`json.dump` or :func:`json.dumps`
+    """
+    ids: dict[int, str] = {}
+    result: dict[str, dict[str, Any]] = {}
+
+    def seq_id(node: Node) -> str:
+        if id(node) not in ids:
+            ids[id(node)] = str(len(ids))
+
+        return ids[id(node)]
+
+    for cursor in traversal.depth(circuit, preorder=True, unique="id"):
+        node = cursor.node
+        assert node is not None
+        data = node.data
+
+        attrs: dict[str, Any] = {"operator": data.operator}
+        result[seq_id(node)] = attrs
+
+        if data.args:
+            attrs["args"] = [arg_encoder(arg) for arg in data.args]
+
+        if node.edges:
+            attrs["children"] = [seq_id(edge.node) for edge in node.edges]
+
+    return result
+
+
+def _circuit_toposort(data: Mapping[str, Any]) -> Iterable[str]:
+    parents = defaultdict(set)
+    outdeg = {}
+    candidates = []
+
+    for seq_id, attrs in data.items():
+        children = attrs.get("children", ())
+        outdeg[seq_id] = len(children)
+
+        if len(children) == 0:
+            candidates.append(seq_id)
+
+        for child in children:
+            parents[child].add(seq_id)
+
+    while candidates:
+        current = candidates.pop()
+        yield current
+
+        for parent in parents[current]:
+            outdeg[parent] -= 1
+
+            if outdeg[parent] == 0:
+                candidates.append(parent)
+
+    if sum(outdeg.values()) > 0:
+        raise ValueError("circuit contains a cycle")
+
+
+def unserialize(
+    data: Mapping[str, Any], arg_decoder: Callable = _passthrough
+) -> Circuit:
+    """
+    Decode an algebraic circuit from its JSON representation.
+
+    :param circuit: decoded JSON object from :func:`json.load` or :func:`json.loads`
+    :param arg_decoder: function transforming arguments from their plain JSON value
+        representation back to their original form
+        (default: identity function)
+    :returns: decoded circuit
+    """
+    if "0" not in data:
+        raise ValueError("circuit does not contain a root node #0")
+
+    result: dict[str, Circuit] = {}
+
+    for item in _circuit_toposort(data):
+        attrs = data[item]
+        result[item] = Node(
+            data=OperatorData(
+                operator=attrs["operator"],
+                args=tuple(arg_decoder(arg) for arg in attrs.get("args", ())),
+            ),
+            edges=tuple(Edge(result[child]) for child in attrs.get("children", ())),
+        )
+
+    return result["0"]
 
 
 def default_circuit_style(data: OperatorData, meta: Any) -> graphviz.Style:
