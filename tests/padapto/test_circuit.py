@@ -8,9 +8,6 @@ from random import Random
 
 from sowing import traversal
 
-from padapto.algebras.cost import add_optimizer, boltzmann
-from padapto.algebras.counter import counter
-from padapto.algebras.signature import Signature
 from padapto.circuit import (
     enumerate_solutions,
     eval,
@@ -23,6 +20,9 @@ from padapto.circuit import (
     serialize,
     unserialize,
 )
+from padapto.evaluation.cost import add_optimizer, boltzmann
+from padapto.evaluation.counter import counter
+from padapto.signature import Signature
 
 
 @dataclass(frozen=True)

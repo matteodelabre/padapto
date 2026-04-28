@@ -5,12 +5,12 @@ from typing import cast
 
 import pytest
 
-from padapto.algebras.group import group
-from padapto.algebras.join import join
-from padapto.algebras.power import power
 from padapto.collections import Multiset
+from padapto.evaluation.group import group
+from padapto.evaluation.join import join
+from padapto.evaluation.power import power
 
-from .test_signature import SemiRing, check_semiring
+from ..test_signature import SemiRing, check_semiring
 
 
 @dataclass(frozen=True, slots=True)

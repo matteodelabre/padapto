@@ -2,13 +2,13 @@ import operator
 from dataclasses import dataclass
 from math import inf
 
-from padapto.algebras.join import join
-from padapto.algebras.pareto import pareto
-from padapto.algebras.power import power
-from padapto.algebras.signature import get_algebra_parent
 from padapto.collections import Multiset
+from padapto.evaluation.join import join
+from padapto.evaluation.pareto import pareto
+from padapto.evaluation.power import power
+from padapto.evaluation.util import get_algebra_parent
 
-from .test_signature import SemiRing, check_semiring
+from ..test_signature import SemiRing, check_semiring
 
 
 @dataclass(frozen=True, slots=True)

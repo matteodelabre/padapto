@@ -2,13 +2,9 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any
 
+from ..signature import Comparator, Signature
 from .join import get_subalgebras, get_subrecord
-from .signature import (
-    Comparator,
-    Signature,
-    pipable,
-    trace,
-)
+from .util import pipable, trace
 
 
 def _make_lex_choice[T](

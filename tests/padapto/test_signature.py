@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import inf
 
-from padapto.algebras.signature import Signature
+from padapto.signature import Signature
 
 
 @dataclass(frozen=True)

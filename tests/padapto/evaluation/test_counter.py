@@ -2,8 +2,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
-from padapto.algebras.counter import counter
-from padapto.algebras.signature import Signature
+from padapto.evaluation.counter import counter
+from padapto.signature import Signature
 
 
 @dataclass(frozen=True)

@@ -5,7 +5,8 @@ from typing import Any
 from sowing import Node
 
 from ..circuit import Circuit, make_node
-from .signature import Signature, make_checked_operator
+from ..signature import Signature
+from .util import make_checked_operator
 
 
 def _choose_operator(left: Circuit, right: Circuit) -> Circuit:

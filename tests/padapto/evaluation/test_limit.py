@@ -1,11 +1,11 @@
 from typing import cast
 
-from padapto.algebras.limit import limit
-from padapto.algebras.power import power
-from padapto.algebras.signature import get_algebra_parent
 from padapto.collections import Multiset
+from padapto.evaluation.limit import limit
+from padapto.evaluation.power import power
+from padapto.evaluation.util import get_algebra_parent
 
-from .test_signature import SemiRing
+from ..test_signature import SemiRing
 
 
 def test_limit() -> None:

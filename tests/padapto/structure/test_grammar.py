@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from immutables import Map
 from sowing import Node
 
-from padapto.algebras import Signature
+from padapto.signature import Signature
 from padapto.structure.grammar import Grammar, clause, grammar, predicate
 from padapto.structure.pattern import Empty, Item, Subseq, Var, Zero, chain
 

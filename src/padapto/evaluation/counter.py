@@ -2,7 +2,8 @@ import dataclasses
 import operator
 from typing import Any
 
-from .signature import Operator, Signature, make_checked_operator
+from ..signature import Signature
+from .util import Operator, make_checked_operator
 
 
 def _counter_operator(args: tuple[tuple[Any, bool], ...]) -> int:

@@ -26,7 +26,7 @@ from typing import Any, ClassVar, Protocol, cast, runtime_checkable
 
 from immutables import Map
 
-from ..algebras import Signature
+from ..signature import Signature
 from .pattern import Pattern, merge
 
 

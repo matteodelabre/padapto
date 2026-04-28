@@ -4,9 +4,9 @@ from functools import partial
 from typing import Any
 
 from ..collections import Record
-from .signature import (
+from ..signature import Signature
+from .util import (
     Operator,
-    Signature,
     extract_algebra_parent,
     make_checked_operator,
     trace,

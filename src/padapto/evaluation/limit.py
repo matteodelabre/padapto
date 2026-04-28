@@ -2,12 +2,8 @@ import dataclasses
 from typing import Any
 
 from ..collections import Multiset
-from .signature import (
-    Operator,
-    Signature,
-    pipable,
-    trace,
-)
+from ..signature import Signature
+from .util import Operator, pipable, trace
 
 
 def _limit_wrap_operator[T](

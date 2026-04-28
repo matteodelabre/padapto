@@ -5,7 +5,7 @@ In most cases, this encoding allows representing an exponential number of soluti
 inside a polynomial-sized object and to efficiently extract solutions and compute
 summary information on the set of solutions.
 
-See also :func:`padapto.algebras.trace` to create circuit-generating algebras from a
+See also :func:`padapto.evaluation.trace` to create circuit-generating algebras from a
 given signature.
 """
 
@@ -13,14 +13,13 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, fields
 from random import Random
-from typing import TYPE_CHECKING, Any, TypeVar, get_args
+from typing import Any, TypeVar, get_args
 
 from immutables import Map
 from sowing import Edge, Node, traversal
 from sowing.repr import graphviz
 
-if TYPE_CHECKING:
-    from .algebras.signature import Signature
+from .signature import Signature
 
 
 @dataclass(frozen=True)

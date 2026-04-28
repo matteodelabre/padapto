@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from math import exp, inf
 from typing import cast
 
-from padapto.algebras.cost import add_optimizer, boltzmann
-from padapto.algebras.signature import Signature
+from padapto.evaluation.cost import add_optimizer, boltzmann
+from padapto.signature import Signature
 
 
 @dataclass(frozen=True)

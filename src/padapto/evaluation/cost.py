@@ -5,7 +5,8 @@ from functools import partial
 from math import exp, inf
 from typing import Any, Literal
 
-from .signature import Operator, Signature, make_checked_operator
+from ..signature import Signature
+from .util import Operator, make_checked_operator
 
 
 def _cost_operator[V](

@@ -6,7 +6,8 @@ from typing import Literal, cast
 from sowing import Hedge, Node
 from sowing.repr.newick import parse
 
-from padapto.algebras import Signature, add_optimizer, boltzmann, counter, trace
+from padapto.signature import Signature
+from padapto.evaluation import add_optimizer, boltzmann, counter, trace
 from padapto.circuit import Circuit, sample
 from padapto.structure import (
     Empty,

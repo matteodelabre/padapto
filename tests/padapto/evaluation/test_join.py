@@ -6,11 +6,12 @@ from typing import cast
 
 import pytest
 
-from padapto.algebras.join import get_subalgebras, get_subrecord, join
-from padapto.algebras.signature import Signature, get_algebra_parent
 from padapto.collections import Record
+from padapto.evaluation.join import get_subalgebras, get_subrecord, join
+from padapto.evaluation.util import get_algebra_parent
+from padapto.signature import Signature
 
-from .test_signature import SemiRing, check_semiring
+from ..test_signature import SemiRing, check_semiring
 
 
 def test_join_invalid() -> None:

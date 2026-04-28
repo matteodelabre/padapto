@@ -3,13 +3,13 @@ from dataclasses import dataclass
 from math import inf
 from typing import cast
 
-from padapto.algebras.join import join
-from padapto.algebras.lex import lex
-from padapto.algebras.power import power
-from padapto.algebras.signature import get_algebra_parent
 from padapto.collections import Multiset
+from padapto.evaluation.join import join
+from padapto.evaluation.lex import lex
+from padapto.evaluation.power import power
+from padapto.evaluation.util import get_algebra_parent
 
-from .test_signature import SemiRing, check_semiring
+from ..test_signature import SemiRing, check_semiring
 
 
 def test_power_simple() -> None:

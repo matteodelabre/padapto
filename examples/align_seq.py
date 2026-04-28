@@ -6,9 +6,9 @@ from itertools import islice
 from random import Random
 from typing import Literal, cast
 
-from padapto.algebras import (
+from padapto.signature import Signature
+from padapto.evaluation import (
     Operator,
-    Signature,
     add_optimizer,
     boltzmann,
     counter,
@@ -20,6 +20,7 @@ from padapto.algebras import (
     power,
     trace,
 )
+
 from padapto.circuit import (
     Circuit,
     enumerate_solutions,
@@ -41,7 +42,7 @@ from padapto.structure import (
     predicate,
 )
 
-from .gettotalsize import gettotalsize
+from examples.gettotalsize import gettotalsize
 
 
 @dataclass(frozen=True)

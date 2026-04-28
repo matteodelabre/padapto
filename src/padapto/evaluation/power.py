@@ -9,14 +9,8 @@ if TYPE_CHECKING:
     from _typeshed import SupportsRichComparison
 
 from ..collections import Multiset
-from .signature import (
-    Comparator,
-    Operator,
-    Signature,
-    make_checked_operator,
-    pipable,
-    trace,
-)
+from ..signature import Comparator, Signature
+from .util import Operator, make_checked_operator, pipable, trace
 
 
 def _merge_multisets[T](

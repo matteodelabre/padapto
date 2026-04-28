@@ -5,11 +5,11 @@ from typing import cast
 
 import pytest
 
-from padapto.algebras.join import join
-from padapto.algebras.lex import lex
-from padapto.algebras.signature import get_algebra_parent
+from padapto.evaluation.join import join
+from padapto.evaluation.lex import lex
+from padapto.evaluation.util import get_algebra_parent
 
-from .test_signature import SemiRing, check_semiring
+from ..test_signature import SemiRing, check_semiring
 
 
 @dataclass(frozen=True, slots=True)

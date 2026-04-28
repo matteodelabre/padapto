@@ -3,16 +3,10 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from ..collections import Multiset
+from ..signature import Comparator, Signature
 from .group import group
 from .join import get_subalgebras, get_subrecord
-from .signature import (
-    Comparator,
-    Operator,
-    Signature,
-    extract_algebra_parent,
-    pipable,
-    trace,
-)
+from .util import Operator, extract_algebra_parent, pipable, trace
 
 
 def _make_pareto_wrapper[T](
