@@ -6,7 +6,7 @@ from ..signature import Signature
 from .util import Operator, make_checked_operator
 
 
-def _counter_operator(args: tuple[tuple[Any, bool], ...]) -> int:
+def _count_operator(args: tuple[tuple[Any, bool], ...]) -> int:
     result = 1
 
     for arg, arg_is_out in args:
@@ -16,7 +16,7 @@ def _counter_operator(args: tuple[tuple[Any, bool], ...]) -> int:
     return result
 
 
-def counter[S: Signature[Any]](signature: type[S]) -> S:
+def count[S: Signature[Any]](signature: type[S]) -> S:
     """
     Create a counting algebra from a signature.
 
@@ -30,7 +30,7 @@ def counter[S: Signature[Any]](signature: type[S]) -> S:
     elements: dict[str, Operator[int]] = {}
 
     for field in dataclasses.fields(signature):
-        elements[field.name] = make_checked_operator(field.type, int, _counter_operator)
+        elements[field.name] = make_checked_operator(field.type, int, _count_operator)
 
     def null():
         return 0

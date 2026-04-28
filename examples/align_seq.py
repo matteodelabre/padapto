@@ -1,26 +1,12 @@
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from itertools import islice
 from random import Random
 from typing import Literal, cast
 
-from padapto.signature import Signature
-from padapto.evaluation import (
-    Operator,
-    add_optimizer,
-    boltzmann,
-    counter,
-    group,
-    join,
-    lex,
-    limit,
-    pareto,
-    power,
-    trace,
-)
-
+from examples.gettotalsize import gettotalsize
 from padapto.circuit import (
     Circuit,
     enumerate_solutions,
@@ -30,6 +16,20 @@ from padapto.circuit import (
     sample,
 )
 from padapto.collections import Multiset, Record
+from padapto.evaluation import (
+    Operator,
+    add_optimizer,
+    boltzmann,
+    count,
+    group,
+    join,
+    lex,
+    limit,
+    pareto,
+    power,
+    trace,
+)
+from padapto.signature import Signature
 from padapto.structure import (
     Empty,
     Grammar,
@@ -41,8 +41,6 @@ from padapto.structure import (
     grammar,
     predicate,
 )
-
-from examples.gettotalsize import gettotalsize
 
 
 @dataclass(frozen=True)
@@ -165,8 +163,8 @@ if __name__ == "__main__":
 # Count the number of possible alignments of two sequences
 # See: Laquer H. Turner, (1981), Asymptotic Limits for a Two-Dimensional Recursion
 # See: OEIS entry A001850
-count: AlignSignature[int] = counter(AlignSignature)
-gr_count = AlignGrammar(count).align
+counter: AlignSignature[int] = count(AlignSignature)
+gr_count = AlignGrammar(counter).align
 
 if __name__ == "__main__":
     assert gr_count(left="", right="") == 1
@@ -386,7 +384,7 @@ if __name__ == "__main__":
 
 
 # Compute the number of alignments of minimum cost
-min_cost_count = join(cost=min_cost, count=count) | lex("cost")
+min_cost_count = join(cost=min_cost, count=counter) | lex("cost")
 gr_min_cost_count = AlignGrammar(min_cost_count).align
 
 if __name__ == "__main__":
@@ -522,12 +520,12 @@ if __name__ == "__main__":
     # Randomly sample among optimal solutions
     gen = Random(42)
     circ = gr_min_cost_aligns(left="alberta", right="camera").solutions
-    sampled_min_sol = sample(circ, gen, cast(AlignSignature[float], count))
+    sampled_min_sol = sample(circ, gen, cast(AlignSignature[float], counter))
     assert sampled_min_sol in enumerate_solutions(circ)
 
 
 # Compute the number of alignments of each cost
-all_costs_count = join(cost=min_cost, count=count) | power() | group("cost")
+all_costs_count = join(cost=min_cost, count=counter) | power() | group("cost")
 gr_all_costs_count = AlignGrammar(all_costs_count).align
 
 if __name__ == "__main__":
@@ -586,24 +584,9 @@ if __name__ == "__main__":
 
 
 # Compute the Pareto-optimal number of operations of each type
-min_change = replace(
-    min_cost,
-    match=lambda count, sym1, sym2: count + 1 if sym1 != sym2 else count,
-    delete=lambda count, sym: count,
-    insert=lambda count, sym: count,
-)
-min_delete = replace(
-    min_cost,
-    match=lambda count, sym1, sym2: count,
-    delete=lambda count, sym: count + 1,
-    insert=lambda count, sym: count,
-)
-min_insert = replace(
-    min_cost,
-    match=lambda count, sym1, sym2: count,
-    delete=lambda count, sym: count,
-    insert=lambda count, sym: count + 1,
-)
+min_change = add_optimizer(AlignSignature, choose="min", match=_unit_cost_match)
+min_delete = add_optimizer(AlignSignature, choose="min", delete=_unit_cost_delete)
+min_insert = add_optimizer(AlignSignature, choose="min", insert=_unit_cost_insert)
 operations = join(changes=min_change, deletes=min_delete, inserts=min_insert)
 par_operations = operations | power() | pareto("*")
 gr_par_operations = AlignGrammar(par_operations).align
@@ -681,7 +664,7 @@ if __name__ == "__main__":
 
 # Compute the number of solutions for each Pareto-optimal operation count
 par_operations_count = (
-    join(operations=operations, count=count) | power() | pareto("operations.*")
+    join(operations=operations, count=counter) | power() | pareto("operations.*")
 )
 gr_par_operations_count = AlignGrammar(par_operations_count).align
 

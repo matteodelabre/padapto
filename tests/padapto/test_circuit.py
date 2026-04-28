@@ -21,7 +21,7 @@ from padapto.circuit import (
     unserialize,
 )
 from padapto.evaluation.cost import add_optimizer, boltzmann
-from padapto.evaluation.counter import counter
+from padapto.evaluation.count import count
 from padapto.signature import Signature
 
 
@@ -202,7 +202,7 @@ def _assert_distrib_none_out(outcomes, sols, bound):
 
 def test_circuit_sample_grid_uniform():
     grid = _make_grid(4)
-    weighting = counter(GridSignature)
+    weighting = count(GridSignature)
     all_sols = set(enumerate_solutions(grid))
     sample_sols = _weighted_sample(grid, weighting, repeats=len(all_sols) * 1000)
     _assert_distrib_uniform(Counter(sample_sols), all_sols, tol=0.1)
@@ -210,7 +210,7 @@ def test_circuit_sample_grid_uniform():
 
 def test_circuit_sample_paren_uniform():
     paren = _make_paren(4)
-    weighting = counter(ParenSignature)
+    weighting = count(ParenSignature)
     all_sols = set(enumerate_solutions(paren))
     sample_sols = _weighted_sample(paren, weighting, repeats=len(all_sols) * 1000)
     _assert_distrib_uniform(Counter(sample_sols), all_sols, tol=0.1)
@@ -252,7 +252,7 @@ def test_circuit_sample_grid_boltzmann():
 
 def test_circuit_outside_count_paren():
     paren = _make_paren(9)
-    weighting = counter(ParenSignature)
+    weighting = count(ParenSignature)
     inside = eval_inside(paren, weighting)
     outside = eval_outside(paren, weighting, inside)
 

@@ -6,9 +6,9 @@ from typing import Literal, cast
 from sowing import Hedge, Node
 from sowing.repr.newick import parse
 
-from padapto.signature import Signature
-from padapto.evaluation import add_optimizer, boltzmann, counter, trace
 from padapto.circuit import Circuit, sample
+from padapto.evaluation import add_optimizer, boltzmann, count, trace
+from padapto.signature import Signature
 from padapto.structure import (
     Empty,
     Grammar,
@@ -137,7 +137,7 @@ def flatten_align(solution: Circuit) -> tuple[AlignForest, ...]:
 
 
 # Compute the number of alignments
-align_counter = counter(ForestSignature)
+align_counter = count(ForestSignature)
 gr_counter = ForestGrammar(align_counter).align
 
 if __name__ == "__main__":
