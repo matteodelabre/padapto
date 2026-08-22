@@ -12,6 +12,7 @@ given signature.
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, fields
+from math import exp
 from random import Random
 from typing import Any, TypeVar, get_args
 
@@ -19,6 +20,7 @@ from immutables import Map
 from sowing import Edge, Node, traversal
 from sowing.repr import graphviz
 
+from .math import logaddexp
 from .signature import Signature
 
 
@@ -326,7 +328,10 @@ def eval_inside[T](circuit: Circuit, alg: Signature[T]) -> dict[int, T]:
 
 
 def eval_outside(
-    circuit: Circuit, alg: Signature[float], inside: dict[int, float]
+    circuit: Circuit,
+    alg: Signature[float],
+    inside: dict[int, float],
+    log_weights: bool = False,
 ) -> dict[int, float]:
     """
     Evaluate the outside weight of each node in a circuit.
@@ -337,10 +342,11 @@ def eval_outside(
     :param circuit: circuit describing the circuit to evaluate
     :param alg: weighting algebra used for evaluaiton
     :param inside: inside values as computed by :func:`eval_inside`
+    :param log_weights: whether the given weights are log-weights (default: False)
     :returns: dictionary associating each node ID to its outside value
     """
-    outside: dict[int, float] = defaultdict(float)
-    outside[id(circuit)] = 1
+    outside: dict[int, float] = defaultdict(alg.null)
+    outside[id(circuit)] = 0.0 if log_weights else 1.0
 
     for cursor in traversal.topological(circuit):
         node = cursor.node
@@ -348,14 +354,20 @@ def eval_outside(
 
         value = outside[id(node)]
 
-        if node.data.is_choose():
-            for child in cursor.children():
-                outside[id(child.node)] += value
-        else:
-            for child in cursor.children():
-                outside[id(child.node)] += (
-                    value * inside[id(node)] / inside[id(child.node)]
+        for child in cursor.children():
+            if node.data.is_choose():
+                neighbors_weight = value
+            elif log_weights:
+                neighbors_weight = value + inside[id(node)] - inside[id(child.node)]
+            else:
+                neighbors_weight = value * inside[id(node)] / inside[id(child.node)]
+
+            if log_weights:
+                outside[id(child.node)] = logaddexp(
+                    outside[id(child.node)], neighbors_weight
                 )
+            else:
+                outside[id(child.node)] += neighbors_weight
 
     return outside
 
@@ -373,7 +385,10 @@ def eval[T](circuit: Circuit, alg: Signature[T]) -> T:
 
 
 def sample(
-    root: Circuit, gen: Random, weights: Signature[float] | Mapping[int, float]
+    root: Circuit,
+    gen: Random,
+    weights: Signature[float] | Mapping[int, float],
+    log_weights: bool = False,
 ) -> Circuit:
     """
     Randomly sample solutions from a circuit according to a specified weighting.
@@ -383,6 +398,7 @@ def sample(
     :param weights: weighting algebra for the solutions (use a standard counting algebra
         for uniform sampling), or a dictionary of weights computed from a weighting
         algebra through :func:`eval_inside`
+    :param log_weights: whether the given weights are log-weights (default: False)
     :returns: randomly sampled solution
     """
     if not isinstance(weights, Mapping):
@@ -392,9 +408,15 @@ def sample(
 
     if root.data.is_choose():
         children_weights = [weights[id(child)] for child in children]
+
+        # Convert log-weights to regular weights, normalizing them to avoid underflows
+        if log_weights:
+            max_weight = max(children_weights)
+            children_weights = [exp(weight - max_weight) for weight in children_weights]
+
         index = gen.choices(range(len(children)), children_weights)[0]
-        return sample(children[index], gen, weights)
+        return sample(children[index], gen, weights, log_weights)
     else:
         return Node[OperatorData, None](root.data).extend(
-            sample(child, gen, weights) for child in children
+            sample(child, gen, weights, log_weights) for child in children
         )

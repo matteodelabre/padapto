@@ -1,7 +1,9 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from math import exp, inf
+from math import exp, inf, log
 from typing import cast
+
+from pytest import approx
 
 from padapto.evaluation.cost import additive, boltzmann
 from padapto.signature import Signature
@@ -63,9 +65,10 @@ def test_cost_boltzmann() -> None:
         ),
     )
 
-    assert boltz.null() == 0
-    assert boltz.choose(3, 7) == 10
-    assert boltz.multichoose(3, 7, 1, 4) == 15
-    assert boltz.unit() == 1
-    assert boltz.combine("a", exp(-3 / 2), "b", exp(-7 / 2)) == exp(-11 / 2)
-    assert boltz.combine("a", exp(-3 / 2), "a", exp(-7 / 2)) == exp(-10 / 2)
+    assert boltz.null() == float("-inf")
+    assert exp(boltz.choose(log(3), log(7))) == approx(10)
+    assert exp(boltz.multichoose(log(3), log(7), log(1), log(4))) == approx(15)
+    assert boltz.choose(-200_000, -300_000) == approx(-200_000)
+    assert boltz.unit() == 0
+    assert boltz.combine("a", -3 / 2, "b", -7 / 2) == -11 / 2
+    assert boltz.combine("a", -3 / 2, "a", -7 / 2) == -10 / 2

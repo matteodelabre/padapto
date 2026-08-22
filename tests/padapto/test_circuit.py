@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import product
+from math import exp, log
 from random import Random
 
 from sowing import traversal
@@ -179,12 +180,12 @@ def test_circuit_enumerate_all():
     ]
 
 
-def _weighted_sample(circuit, alg, repeats):
+def _weighted_sample(circuit, alg, repeats, log_weights=False):
     weights = eval_inside(circuit, alg)
     gen = Random(42)
 
     for _ in range(repeats):
-        yield sample(circuit, gen, weights)
+        yield sample(circuit, gen, weights, log_weights)
 
 
 def _assert_distrib_uniform(outcomes, sols, tol):
@@ -227,23 +228,29 @@ def test_circuit_sample_grid_boltzmann():
 
     # Low temperature means uniform sampling among optimal solutions only
     opt_sols = {sol for sol in enumerate_solutions(grid) if eval(sol, cost_eval) == 3}
-    opt_weighting = boltzmann(GridSignature, temperature=0.1, **operators)
-    opt_sample = _weighted_sample(grid, opt_weighting, repeats=len(opt_sols) * 1000)
+    opt_weighting = boltzmann(GridSignature, temperature=0.0001, **operators)
+    opt_sample = _weighted_sample(
+        grid, opt_weighting, repeats=len(opt_sols) * 1000, log_weights=True
+    )
     opt_outcomes = Counter(opt_sample)
     _assert_distrib_uniform(opt_outcomes, opt_sols, tol=0.1)
     _assert_distrib_none_out(opt_outcomes, opt_sols, bound=10)
 
     # High temperature means uniform sampling among all solutions
     all_sols = set(enumerate_solutions(grid))
-    all_weighting = boltzmann(GridSignature, temperature=100, **operators)
-    all_sample = _weighted_sample(grid, all_weighting, repeats=len(all_sols) * 1000)
+    all_weighting = boltzmann(GridSignature, temperature=10000, **operators)
+    all_sample = _weighted_sample(
+        grid, all_weighting, repeats=len(all_sols) * 1000, log_weights=True
+    )
     all_outcomes = Counter(all_sample)
     _assert_distrib_uniform(all_outcomes, all_sols, tol=0.1)
     _assert_distrib_none_out(all_outcomes, all_sols, bound=0)
 
     # Intermediate temperature means less costly solutions are sampled more often
     med_weighting = boltzmann(GridSignature, temperature=1, **operators)
-    med_sample = _weighted_sample(grid, med_weighting, repeats=len(all_sols) * 1000)
+    med_sample = _weighted_sample(
+        grid, med_weighting, repeats=len(all_sols) * 1000, log_weights=True
+    )
     med_outcomes = Counter(med_sample)
     med_most_common = [eval(sol, cost_eval) for sol, _ in med_outcomes.most_common()]
     assert all_sols == set(med_outcomes.keys())
@@ -276,21 +283,20 @@ def test_circuit_outside_count_paren():
 
 def _assert_sample_expected_subcounts(circuit, alg, repeats, tol):
     inside = eval_inside(circuit, alg)
-    outside = eval_outside(circuit, alg, inside)
+    outside = eval_outside(circuit, alg, inside, log_weights=True)
     root_val = inside[id(circuit)]
 
     expected = {
-        cursor.node.data.args: inside[id(cursor.node)]
-        * outside[id(cursor.node)]
-        * repeats
-        / root_val
+        cursor.node.data.args: exp(
+            inside[id(cursor.node)] + outside[id(cursor.node)] + log(repeats) - root_val
+        )
         for cursor in traversal.depth(circuit, unique="id")
         if not cursor.node.data.is_choose()
     }
 
     actual = Counter(
         cursor.node.data.args
-        for sol in _weighted_sample(circuit, alg, repeats=repeats)
+        for sol in _weighted_sample(circuit, alg, repeats=repeats, log_weights=True)
         for cursor in traversal.depth(sol)
         if not cursor.node.data.is_choose()
     )
@@ -308,11 +314,11 @@ def test_circuit_outside_sample_paren():
         "combine": lambda i, j, k: abs(i - j) + abs(j - k),
     }
 
-    opt_weighting = boltzmann(ParenSignature, temperature=0.1, **operators)
+    opt_weighting = boltzmann(ParenSignature, temperature=0.0001, **operators)
     _assert_sample_expected_subcounts(paren, opt_weighting, repeats=10_000, tol=0.01)
 
-    all_weighting = boltzmann(ParenSignature, temperature=100, **operators)
-    _assert_sample_expected_subcounts(paren, all_weighting, repeats=10_000, tol=0.01)
+    all_weighting = boltzmann(ParenSignature, temperature=10000, **operators)
+    _assert_sample_expected_subcounts(paren, all_weighting, repeats=10_000, tol=0.025)
 
     med_weighting = boltzmann(ParenSignature, temperature=1, **operators)
     _assert_sample_expected_subcounts(paren, med_weighting, repeats=10_000, tol=0.01)

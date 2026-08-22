@@ -2,9 +2,9 @@ import dataclasses
 import operator
 from collections.abc import Callable
 from functools import partial
-from math import exp, inf
 from typing import Any, Literal
 
+from ..math import logaddexp
 from ..signature import Signature
 from .util import Operator, make_checked_operator
 
@@ -53,17 +53,17 @@ def additive[S: Signature[Any]](
         out_operator = operators.get(field.name, lambda *args: 0)
         op = partial(
             _cost_operator,
-            0,
-            operator.add,
-            out_operator,
-            lambda x: x,
+            0,  # unit
+            operator.add,  # in_operator
+            out_operator,  # out_operator
+            lambda x: x,  # out_to_in
         )
         elements[field.name] = make_checked_operator(field.type, int | float, op)
 
     if choose == "min":
 
         def null():
-            return inf
+            return float("inf")
 
         def choose_op(x, y):
             return min(x, y)
@@ -71,7 +71,7 @@ def additive[S: Signature[Any]](
     else:
 
         def null():
-            return -inf
+            return float("-inf")
 
         def choose_op(x, y):
             return max(x, y)
@@ -88,6 +88,8 @@ def boltzmann[S: Signature[Any]](
 ) -> S:
     """
     Create an algebra computing Boltzmann weights based on an additive cost.
+
+    The Boltzmann weights are computed in log-space to avoid underflows.
 
     Note: The return type should be 'S[float]'. Unfortunately, Python’s type
     system is not powerful enough to express this yet (see
@@ -106,19 +108,19 @@ def boltzmann[S: Signature[Any]](
     elements: dict[str, Operator[float]] = {}
 
     for field in dataclasses.fields(signature):
-        out_operator = operators.get(field.name, lambda *args: 0)
+        out_operator = operators.get(field.name, lambda *args: 0.0)
         op = partial(
             _cost_operator,
-            1.0,
-            operator.mul,
-            out_operator,
-            lambda x: exp(-(x / temperature)),
+            0.0,  # unit
+            operator.add,  # in_operator
+            out_operator,  # out_operator
+            lambda x: -x / temperature,  # out_to_in
         )
-        elements[field.name] = make_checked_operator(field.type, int | float, op)
+        elements[field.name] = make_checked_operator(field.type, float, op)
 
     def null():
-        return 0
+        return float("-inf")
 
     elements["null"] = null
-    elements["choose"] = operator.add
+    elements["choose"] = logaddexp
     return signature(**elements)
