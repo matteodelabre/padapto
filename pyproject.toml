@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "padapto"
-version = "0.0.0"
+version = "0.0.1"
 authors = [
     { name="Mattéo Delabre", email="git.matteo@delab.re" },
 ]
-description = "TODO"
+description = "Facilitate the exploration and design of dynamic programming algorithms in an algebraic style"
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
