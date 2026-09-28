@@ -378,7 +378,7 @@ if __name__ == "__main__":
     circ = gr_tracer(left="alberta", right="camera")
     min_cost_circ = 2 * gr_min_cost(left="alberta", right="camera")
 
-    sampled_boltz_sol = sample(circ, gen, boltz_distr)
+    sampled_boltz_sol = sample(circ, gen, boltz_distr, log_weights=True)
     assert sampled_boltz_sol in enumerate_solutions(circ)
     assert cost_of(flatten_align(sampled_boltz_sol)) <= min_cost_circ
 

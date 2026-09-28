@@ -106,6 +106,9 @@ def test_grammar_class() -> None:
 
     assert gram.pred1(t1="4", t2=7, t3=Node(8)) == 11 * 4 + 7 * 7 + 11 * 44 * 13 * 7
 
+    pred1 = gram.pred1
+    assert pred1(t1="4", t2=7, t3=Node(8)) == 11 * 4 + 7 * 7 + 11 * 44 * 13 * 7
+
     assert gram.memo == {
         "pred1": {
             Map(

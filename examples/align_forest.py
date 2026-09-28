@@ -184,7 +184,7 @@ if __name__ == "__main__":
     assert gr_min_cost(left=left, right=right) == 5
 
     circ = gr_tracer(left=left, right=right)
-    sol = sample(circ, Random(42), align_boltzmann)
+    sol = sample(circ, Random(42), align_boltzmann, log_weights=True)
     assert flatten_align(sol) == (
         AlignForest(("match", "a", "a"))
         .add(
