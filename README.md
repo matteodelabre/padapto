@@ -7,6 +7,15 @@
 - [Sequence alignment](examples/align_seq.py)
 - [Forest alignment](examples/align_forest.py)
 
+## Installation
+
+_padapto_ is [available as a package on PyPI](https://pypi.org/project/padapto/).
+Python ⩾3.12 is required.
+
+```shell
+pip install padapto
+```
+
 ## Usage
 
 To define a new combinatorial problem, one starts by defining its [signature](#signatures).
