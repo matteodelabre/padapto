@@ -320,6 +320,21 @@ In effect, we have automatically generated [Nussinov](https://en.wikipedia.org/w
 The `@grammar`, `@predicate` and `@clause` decorators act jointly to generate code.
 The contructed memoization tables can be inspected using the internal `memo` attribute of the grammar instance.
 
+## References
+
+The main influences of this work are:
+
+- R. Giegerich, C. Meyer, and P. Steffen, [“A discipline of dynamic programming over sequence data,”](https://doi.org/10.1016/j.scico.2003.12.005) Science of Computer Programming, vol. 51, no. 3, pp. 215–263, Jun. 2004.
+- P. Steffen and R. Giegerich, [“Versatile and declarative dynamic programming using pair algebras,”](https://doi.org/10.1186/1471-2105-6-224) BMC Bioinformatics, vol. 6, no. 1, Dec. 2005.
+- C. Saule and R. Giegerich, [“Pareto optimization in algebraic dynamic programming,”](https://almob.biomedcentral.com/articles/10.1186/s13015-015-0051-7) Algorithms Mol Biol, vol. 10, no. 1, Dec. 2015.
+- M. Riechert, C. H. zu Siederdissen, and P. F. Stadler, [“Algebraic dynamic programming for multiple context-free grammars,”](https://doi.org/10.1016/j.tcs.2016.05.032) Theoretical Computer Science, vol. 639, pp. 91–109, Aug. 2016.
+- S. Berkemer, C. H. zu Siederdissen, and P. Stadler, [“Algebraic dynamic programming on trees,”](https://doi.org/10.3390/a10040135) Algorithms, vol. 10, no. 4, p. 135, Dec. 2017.
+
+Other existing implementations of the _algebraic_ paradigm for dynamic programming include:
+
+- [ADPfusion](https://github.com/choener/ADPfusion), a Haskell library
+- [Bellman's GAP](https://github.com/jlab/gapc), a C++ compiler for a DSL
+
 ## License
 
 This code is released under the [GNU General Public License v3](./LICENSE) license, or any newer version of the GPL license.
