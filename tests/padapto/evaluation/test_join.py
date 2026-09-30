@@ -157,7 +157,7 @@ def test_join_typed_semirings() -> None:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Example[T](Signature[T]):
     m1: Callable[[T, T, T], T]
     m2: Callable[[str, T, str], T]

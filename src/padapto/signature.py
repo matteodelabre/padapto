@@ -6,7 +6,8 @@ from typing import Self
 type Comparator[T] = Callable[[T, T], bool]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, weakref_slot=True)
+# NOTE: weakref_slot makes subclasses weakref-able, required for `evaluation.util.trace`
 class Signature[T]:
     """
     Abstract base class for signatures.
