@@ -163,7 +163,7 @@ The `trace` algebra builder from the `padapto.evaluation` module automatically b
 
 - `enumerate_solutions(root)`:
   Generator that yields the solutions encoded by a given circuit one after the other.
-  The time and memory required to produce one solution is guaranteed to be linear in the circuit size, however in general there may be exponentially many solutions.
+  The time and memory required to produce one solution is guaranteed to be linear in the circuit depth, however in general there may be exponentially many solutions.
 
 - `get_solution(circuit)`:
   Produce an arbitrary solution from the solutions encoded by the circuit.

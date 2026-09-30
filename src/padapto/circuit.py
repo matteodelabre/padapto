@@ -10,7 +10,7 @@ given signature.
 """
 
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields
 from math import exp
 from random import Random
@@ -210,7 +210,10 @@ def render(
     )
 
 
-def lazyproduct(*args: Iterable[Any]) -> Iterable[tuple]:
+def lazyproduct[T, U](
+    iterator_maker: Callable[[T], Iterable[U]],
+    args: Sequence[T],
+) -> Iterable[tuple[U, ...]]:
     """
     Lazy-evaluation equivalent to `itertools.product`.
 
@@ -221,19 +224,9 @@ def lazyproduct(*args: Iterable[Any]) -> Iterable[tuple]:
     if not args:
         yield ()
     else:
-        first = True
-        saved = []
-
-        for arg in args[0]:
-            if first:
-                for item in lazyproduct(*args[1:]):
-                    saved.append(item)
-                    yield (arg,) + item
-
-                first = False
-            else:
-                for item in saved:
-                    yield (arg,) + item
+        for arg in iterator_maker(args[0]):
+            for item in lazyproduct(iterator_maker, args[1:]):
+                yield (arg,) + item
 
 
 def enumerate_solutions(root: Circuit) -> Iterable[Circuit]:
@@ -257,9 +250,7 @@ def enumerate_solutions(root: Circuit) -> Iterable[Circuit]:
 
         return
 
-    for children in lazyproduct(
-        *(enumerate_solutions(child) for child in root.children())
-    ):
+    for children in lazyproduct(enumerate_solutions, tuple(root.children())):
         yield Node(root.data).extend(children)
 
 

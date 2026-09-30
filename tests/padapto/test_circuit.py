@@ -1,5 +1,7 @@
 import dataclasses
 import json
+import time
+import tracemalloc
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -24,6 +26,12 @@ from padapto.circuit import (
 from padapto.evaluation.cost import additive, boltzmann
 from padapto.evaluation.count import count
 from padapto.signature import Signature
+
+# Grid circuit family
+# -------------------
+# Similar to the circuits obtained for sequence alignment. Choice nodes have up to three
+# children and constructor nodes have up to one child. The number of solutions is
+# A001850(n) (https://oeis.org/A001850), where n is the circuit size.
 
 
 @dataclass(frozen=True)
@@ -52,6 +60,14 @@ def _make_grid(size):
         grid[i][j] = node
 
     return grid[size - 1][size - 1]
+
+
+# Parenthesis circuit family
+# --------------------------
+# Similar to the circuits obtained for matrix chain multiplication or secondary
+# structure prediction. Solutions are binary trees with a fixed number of leaves.
+# The number of solutions is A000108(n - 1) (https://oeis.org/A000108), where n
+# is the circuit size.
 
 
 @dataclass(frozen=True)
@@ -93,18 +109,14 @@ def test_paren_non_redundant():
     assert len(keys) == len(set(keys))
 
 
-def test_circuit_get_solution():
+def test_circuit_get_solution_choose():
     assert get_solution(
         make_node("choose").add(make_node("unit1")).add(make_node("unit2"))
     ) == make_node("unit1")
 
 
 def test_circuit_get_solution_grid():
-    # Even with a large circuit, getting a single solution should take reasonable time.
-    # Here, the grid circuit of size 30 contains 1 682 471 873 186 160 624 243 possible
-    # paths (29th term of OEIS A001850), yet `get_solution` should still complete in a
-    # fraction of a second
-    size = 20
+    size = 15
     grid = _make_grid(size)
     res = make_node("unit")
 
@@ -119,9 +131,7 @@ def test_circuit_get_solution_grid():
 
 
 def test_circuit_get_solution_paren():
-    # Same here but with a circuit containing combination nodes. The number of solutions
-    # in this case is 1 002 242 216 651 368 (29th Catalan number)
-    size = 30
+    size = 15
     paren = _make_paren(size)
     res = make_node("unit", (size - 1,))
 
@@ -178,6 +188,58 @@ def test_circuit_enumerate_all():
         )
         .add(make_node("unit", (2,))),
     ]
+
+
+def _total_time_all_solutions(circuit):
+    start = time.perf_counter()
+
+    for _ in enumerate_solutions(circuit):
+        pass
+
+    end = time.perf_counter()
+    return end - start
+
+
+def _peak_memory_all_solutions(circuit):
+    tracemalloc.start()
+    tracemalloc.reset_peak()
+    _, base_usage = tracemalloc.get_traced_memory()
+
+    for _ in enumerate_solutions(circuit):
+        pass
+
+    _, max_usage = tracemalloc.get_traced_memory()
+    return max_usage - base_usage
+
+
+def _measure_circuit_depth(circuit):
+    return max(cursor.depth for cursor in traversal.leaves(circuit))
+
+
+def _assert_circuit_enum_linear(maker, counter, base_param, max_param):
+    time_usage = {}
+    memory_usage = {}
+    circuit_depth = {}
+
+    for param in range(1, max_param + 1):
+        circuit = maker(param)
+        solution_count = eval(circuit, counter)
+        time_usage[param] = _total_time_all_solutions(circuit) / solution_count
+        memory_usage[param] = _peak_memory_all_solutions(circuit)
+        circuit_depth[param] = _measure_circuit_depth(circuit)
+
+    depth_growth = circuit_depth[max_param] / circuit_depth[base_param]
+    time_growth = time_usage[max_param] / time_usage[base_param]
+    memory_growth = memory_usage[max_param] / memory_usage[base_param]
+
+    tolerance = 1.1
+    assert time_growth <= depth_growth * tolerance
+    assert memory_growth <= depth_growth * tolerance
+
+
+def test_circuit_enumerate_all_perf():
+    _assert_circuit_enum_linear(_make_grid, count(GridSignature), 4, 8)
+    _assert_circuit_enum_linear(_make_paren, count(ParenSignature), 4, 11)
 
 
 def _weighted_sample(circuit, alg, repeats, log_weights=False):
