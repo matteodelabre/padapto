@@ -27,7 +27,7 @@ def limit[S: Signature[Multiset[Any]]](algebra: S, maxsize: int | None) -> S:
     that the resulting multisets are subsets of the complete set of results, whose size
     is upper bounded by the parameter.
 
-    :param alg: original algebra
+    :param algebra: original algebra
     :param maxsize: maximum size of sets to yield, or None to disable limiting
     :returns: limited algebra
     """

@@ -50,9 +50,10 @@ def pareto[S: Signature[Multiset[Any]]](algebra: S, *keys: str) -> S:
     Select non-dominated values in the powerset of a joined algebra.
 
     When choosing between two sets of values, given a set of fields from a joined
-    algebra, use the natural order of each field to keep all values for which there does
-    not exist any one that is better or equal to them on all fields. If two values are
-    equal on all fields, combine them using the original choice function.
+    algebra, use the natural order of each field to keep all non-dominated values, i.e.,
+    values such for which there does not exist any different value that is better than
+    or equal to them on all fields. If two values are equal on all fields, combine them
+    using the original choice function.
 
     The resulting algebra is valid if the given algebra is valid and all the natural
     orders of the given fields are total and monotonous, which is the case if the choice

@@ -114,7 +114,7 @@ def predicate[T: Callable](fun: T) -> T:
 
 class Grammar[Out](Protocol):
     """
-    Yield grammar encoded as a class.
+    Describe a yield grammar.
 
     To create grammar classes, use the @:func:`grammar` decorator.
     """

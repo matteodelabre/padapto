@@ -127,7 +127,7 @@ def unserialize(
     """
     Decode an algebraic circuit from its JSON representation.
 
-    :param circuit: decoded JSON object from :func:`json.load` or :func:`json.loads`
+    :param data: decoded JSON object from :func:`json.load` or :func:`json.loads`
     :param arg_decoder: function transforming arguments from their plain JSON value
         representation back to their original form
         (default: identity function)
@@ -242,7 +242,7 @@ def enumerate_solutions(root: Circuit) -> Iterable[Circuit]:
 
     This function successively yields all the solutions represented by the circuit.
     While the number of solutions may be exponential in the size of the original
-    circuit, this function only needs linear time and memory to go from a circuit
+    circuit, this function only needs linear time and memory to go from one solution
     to the next.
 
     :param root: root of the circuit to traverse
@@ -277,7 +277,7 @@ def eval_inside[T](circuit: Circuit, alg: Signature[T]) -> dict[int, T]:
     """
     Evaluate a given algebra at each node of a circuit.
 
-    :param circuit: circuit describing the structure to evaluate
+    :param circuit: circuit to evaluate
     :param alg: algebra to use for evaluation
     :returns: dictionary associating each node ID to its value
     """
@@ -339,8 +339,8 @@ def eval_outside(
     For each circuit node, its outside weight is the total weight of all solutions
     containing the node when treating this node as if it were a leaf.
 
-    :param circuit: circuit describing the circuit to evaluate
-    :param alg: weighting algebra used for evaluaiton
+    :param circuit: circuit to evaluate
+    :param alg: weighting algebra used for evaluation
     :param inside: inside values as computed by :func:`eval_inside`
     :param log_weights: whether the given weights are log-weights (default: False)
     :returns: dictionary associating each node ID to its outside value
@@ -376,7 +376,7 @@ def eval[T](circuit: Circuit, alg: Signature[T]) -> T:
     """
     Evaluate a circuit under an algebra.
 
-    :param circuit: circuit describing the circuit to evaluate
+    :param circuit: circuit to evaluate
     :param alg: algebra to use for evaluation
     :returns: value of the circuit as a whole
     """

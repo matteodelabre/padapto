@@ -18,7 +18,7 @@ def pipable[F, **P, T](
     argument to be provided on the left through the | operator.
 
     :param func: function to wrap
-    :returns wrapped function
+    :returns: wrapped function
     """
 
     @wraps(func)
@@ -115,7 +115,7 @@ def trace(transparent: bool = False):
     Transform an algebra-producing function to keep a record of its origin.
 
     When an algebra `alg` is produced by the wrapped function, the producing function’s
-    name and arguments can be retrieved using the :fun:`get_algebra_parent` function.
+    name and arguments can be retrieved using the :func:`get_algebra_parent` function.
 
     :param transparent: if True, assume that the first argument of the function will be
         an algebra itself, and inherit the origin of that algebra as the origin of the
@@ -162,7 +162,7 @@ def extract_algebra_parent(
     :param maker: expected producing function
     :param index: index of the positional argument to extract
     :param kwargs: if True, extract all keyword arguments
-    :returns: extract arguments if the function matches, None otherwise
+    :returns: extracted arguments if the function matches, None otherwise
     """
     if (parent := get_algebra_parent(algebra)) is None:
         return None
