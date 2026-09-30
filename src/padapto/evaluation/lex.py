@@ -43,7 +43,7 @@ def lex[S: Signature[Any]](algebra: S, *keys: str) -> S:
     all fields, combine them using the original choice function.
 
     The resulting algebra is valid if all the natural orders of all given fields are
-    total and monotonous, which is the case if the choice functions of the respective
+    total and monotone, which is the case if the choice functions of the respective
     subalgebras are conservative.
 
     Repeated call of this function on multiple fields is equivalent to a single call on

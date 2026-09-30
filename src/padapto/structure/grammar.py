@@ -11,7 +11,7 @@ field named `alg`. Clauses of the grammar are defined as (usually private) metho
 decorated with @:func:`clause`. Predicates of the grammar are (usually public) fields
 declared using :func:`predicate`.
 
-To instanciate a grammar, simply call its constructor and provide a suitable evaluation
+To instantiate a grammar, simply call its constructor and provide a suitable evaluation
 algebra. Interactions with the resulting grammar usually happen through its predicates.
 Each grammar instance has its own independent memoization tables.
 """
@@ -51,7 +51,7 @@ class Clause[Out](Protocol):
     """
 
     def __call__(gram, *args: Any) -> Out:
-        """Invoke the clause with the given instanciated variables."""
+        """Invoke the clause with the given instantiated variables."""
         ...
 
 

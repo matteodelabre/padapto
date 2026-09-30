@@ -56,7 +56,7 @@ def pareto[S: Signature[Multiset[Any]]](algebra: S, *keys: str) -> S:
     using the original choice function.
 
     The resulting algebra is valid if the given algebra is valid and all the natural
-    orders of the given fields are total and monotonous, which is the case if the choice
+    orders of the given fields are total and monotone, which is the case if the choice
     functions of the respective subalgebras are conservative.
 
     Note: Corresponds to the "Pareto product operator" as defined in "Pareto

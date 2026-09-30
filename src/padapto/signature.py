@@ -60,7 +60,7 @@ class Signature[T]:
         choice(x, x) = x for any x) and is total if the algebra is conservative
         (i.e., if choice(x, y) ∈ {x, y} for any x and y).
 
-        When it exists, this order is always monotonous with respect to other algebra
+        When it exists, this order is always monotone with respect to other algebra
         functions, i.e., if x ⩽ y, then f(x, z) ⩽ f(y, z) for any x, y and z, for any
         function f of the algebra and for any argument of f.
 
